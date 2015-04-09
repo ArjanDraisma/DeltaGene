@@ -54,7 +54,6 @@ import javax.swing.UIManager;
 
 
 class DeltaGene {
-	
 	private static Gui dggui;
 	private static File hpofile;
 	private static File assocfile;

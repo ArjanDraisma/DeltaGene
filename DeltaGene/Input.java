@@ -1330,7 +1330,8 @@ class input extends Gui {
 				results = outArray;
 				break;
 			case AND:
-				// TODO int aSizePrior = oA.size();
+				// TODO show how many genes differ between input and output
+				
 				// loop through each input in operand B
 				for (int i = 0; i < oB.size(); i++) {
 					// loop through each element in operand A backwards
