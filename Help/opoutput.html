@@ -1,0 +1,36 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN"
+   "http://www.w3.org/TR/html4/loose.dtd">
+<HTML>
+<TITLE>DeltaGene help</TITLE>
+<BODY>
+<DIV ID="Content">
+<H1>This is the help file for DeltaGene.</H1>
+<H2>Contents</H2>
+<A HREF="index.html">Introduction</A><BR>
+<A HREF="general.html">General usage</A><BR>
+Operators and output<BR>
+<A HREF="browser.html">HPO Browser</A><BR>
+<A HREF="source.html">Source</A><BR>
+
+<H3>Default (A)</H3>
+The <B COLOR="11AA11">output</B> for list(s) <B COLOR="FF0000">B</B> only contain those genes <B>that also occur</B> in list <B COLOR="#0000FF">A</B>. This is the programs' default behaviour.<BR><BR>
+<IMG SRC="Image/A.png">
+<BR>
+<H3>AND</H3>
+Similar to the default behaviour, the The <B COLOR="11AA11">output</B> will be a single column that only contains genes that occur in both <B COLOR="#0000FF">A</B> and <B COLOR="FF0000">B</B><BR><BR>
+<IMG SRC="Image/AandB.png">
+<BR>
+<H3>NOT</H3>
+This functions' <B COLOR="11AA11">output</B> is a single column with genes that are exclusive to <B COLOR="#0000FF">A</B>.<BR><BR>
+<IMG SRC="Image/AnotB.png">
+<BR>
+<H3>XOR</H3>
+This functions' <B COLOR="11AA11">output</B> is multiple columns with genes that are in <B COLOR="#0000FF">A</B> or <B COLOR="FF0000">B</B> but not in both<BR><BR>
+<IMG SRC="Image/AxorB.png">
+
+<H3>Output</H3>
+The standard output is a table with <B COLOR="#0000FF">A</B> in the leftmost column, and list(s) <B COLOR="FF0000">B</B> in the columns thereafter.<BR>
+It is possible to copy and paste cells into spreadsheet programs.
+</DIV>
+</BODY>
+</HTML>
