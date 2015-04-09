@@ -130,10 +130,7 @@ class input extends Gui {
 				 * would take about a minute.
 				 */
 				public void expandPaths () {
-					TreePath[] paths = getSelectionPaths();
-					for (TreePath path : paths) {
-						
-					}
+					
 				}
 				
 				public void collapseAll() {

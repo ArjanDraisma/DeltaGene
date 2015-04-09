@@ -85,7 +85,11 @@ public class Gui extends Thread implements ActionListener, ItemListener {
 		 */
 		public void show(String page) {
 			try{
-				URL u = new File("Help\\"+page+".html").toURI().toURL(); // This sets a URL to a specified html file (either index or about)
+				// This sets a URL to a specified html file
+				// Should be either 'index' or 'about'
+				System.out.println(DeltaGene.class.getResource("Help/"+page+".html"));
+				//URL u = new File("Help\\"+page+".html").toURI().toURL();
+				URL u = DeltaGene.class.getResource("Help\\"+page+".html");
 				content.setPage(u);		// this sets the html file as the editorpane's content
 				helpframe.pack();
 				helpframe.setLocationRelativeTo(null); 	// this centers the help/about window
