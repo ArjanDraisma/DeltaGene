@@ -88,29 +88,22 @@ class DeltaGene {
 	    return buffer.toString();
 	}
 	
-	/**
-	 * GetLatestHPOFiles gets the latest HPO term list from http://compbio.charite.de/hudson/job/hpo/lastStableBuild/.
-	 * It checks for the timestamp of the latest version by reading the associated JSON file retrieved from 
-	 * http://compbio.charite.de/hudson/job/hpo/lastStableBuild/api/json. It will store hpo files as .obo files in a
-	 * directory named HPO, which will be created if it does not exist in the same folder as the applet is run in.
-	 * getLatestHPOFiles will delete .obo files with a timestamp that is lower than the timestamp of the latest file.
-	 * It will only delete files in the HPO directory. It does not delete any files other than .obo files.
-	 * 
-	 * @return true on success, false on failure.
-	 */
-	
-	private static boolean getLatestHPOFiles() {
+	private static boolean getLatestFiles() {
 		try {
-			File[] oldhpo;
+			File[] oldfiles;
 			String json;
 			String buffer;
 			URL jsonurl;
-			URL  hpourl;
-			Pattern _regx;
-			Matcher _match;
+			URL fileurl;
 			BufferedReader in;
-			InputStream hpostream;
+			InputStream istream;
+			FileWriter out;
+			/* 	Since we will be searching for the timestamp in filenames and text,
+			we will not be using a Long or Date variable. */
+			String timestamp;
+			long start, stop, time;
 			
+			start = System.currentTimeMillis();
 			// We inform the user that the application is downloading the HPO file
 			dggui.setUpdateLabelText("Downloading HPO file, please wait...");
 			
@@ -121,23 +114,8 @@ class DeltaGene {
 			// convertStreamToString loads the JSON in a string.
 			// the JSON file is ~1100 characters long.
 			json = convertStreamToString(jsonurl.openStream());
-			
-			/* 	Since we will be searching for the timestamp in filenames and text,
-				we will not be using a Long or Date variable. */
-			String timestamp;
-			
-			// _regx will match the digits that occur between "timestamp": and ','
-			_regx = Pattern.compile("(?:timestamp\":(\\d+),)");
-			_match = _regx.matcher(json);
-			
-			// if a match is found we use it as the timestamp.
-			if (_match.find()) {
-				timestamp = _match.group(1);
-			}else{
-				/* 	This really should never happen; if the JSON does not exist, an
-				 	exception will be thrown earlier.								*/
-				return false;
-			}
+			int tsindex = json.indexOf("timestamp\":")+"timestamp\":".length();
+			timestamp = json.substring(tsindex,  json.indexOf(",\"url"));
 			
 			// check if HPO folder exists
 			if (!dir.exists()) {
@@ -163,20 +141,12 @@ class DeltaGene {
 				dggui.down = 0;
 				
 				// oldhpo will contain the filenames for all files in the HPO directory 
-				oldhpo = dir.listFiles();
+				oldfiles = dir.listFiles();
 				
-				// This _regx will find any file named <digit>.hpo
-				_regx = Pattern.compile("(\\d+.obo)");
-				
-				/* 
-				 * this loop deletes any files with digits that do not equal the current timestamp
-				 * digits
-				 */
-				for (int i = 0; i < oldhpo.length; i++) {
-					_match = _regx.matcher(oldhpo[i].getName());
-					if (_match.matches()) {
-						oldhpo[i].delete();
-					}
+				for (File file : oldfiles) {
+					if (file.getName().endsWith(".obo")) 
+						if (!file.getName().startsWith(timestamp))
+							file.delete();
 				}
 				
 				// Create the file if it does not exist
@@ -186,91 +156,62 @@ class DeltaGene {
 				 * From here, the method will download the HPO number database from
 				 * the file pointed to by 'hpourl' and put it in 'hpofile'
 				 */
-				hpourl = new URL("http://compbio.charite.de/hudson/job/"
+				fileurl = new URL("http://compbio.charite.de/hudson/job/"
 						+ "hpo/lastStableBuild/artifact/hp/hp.obo");
-				FileWriter out = new FileWriter(hpofile);
-				hpostream =	hpourl.openConnection().getInputStream(); 
-				in = new BufferedReader(new InputStreamReader(hpostream));
+				out = new FileWriter(hpofile);
+				istream =	fileurl.openConnection().getInputStream(); 
+				in = new BufferedReader(new InputStreamReader(istream));
 				while ((buffer = in.readLine()) != null) { 
 					out.write(buffer+"\n");
 					dggui.down += buffer.length();
 				}
 				out.close();
 			}
-			return true;
-		} catch (IOException e) {
-			/* 
-			 * if any of the file creation or opening fails, an error will be shown and the 
-			 * program will quit.
-			 */
-			e.printStackTrace();
-			return false;
-		}
-	}
-	
-	/**
-	 * getLatestAssocFiles is nearly identical to getLatestAssocFiles, except for
-	 * the file that it downloads.
-	 * 
-	 * @return true on success, false on failure
-	 */
-	private static boolean getLatestAssocFiles() {
-		try {
-			File[] oldhpo;
-			String json;
-			String buffer;
-			URL jsonurl;
-			URL assocurl;
-			Pattern _regx;
-			Matcher _match;
-			BufferedReader in;
-			InputStream assocstream;
-			String timestamp;
-			FileWriter out;
+			stop = System.currentTimeMillis();
+			time = stop - start;
+			System.out.println("(Down)loading the HPO file took "+time+" millis");
 			
+			start = System.currentTimeMillis();
 			dggui.setUpdateLabelText("Downloading association files. "
 					+ "Please wait...");
 			
 			jsonurl = new URL("http://compbio.charite.de/hudson/"
 					+ "job/hpo.annotations.monthly/lastStableBuild/api/json");
 			json = convertStreamToString(jsonurl.openStream());
+			tsindex = json.indexOf("timestamp\":")+"timestamp\":".length();
+			timestamp = json.substring(tsindex, json.indexOf(",\"url"));
 			
-			_regx = Pattern.compile("(?:timestamp\":(\\d+),)");
-			_match = _regx.matcher(json);
-			if (_match.find()) {
-				timestamp = _match.group(1);
-			}else{
-				return false;
-			}
-			if (!dir.exists()) {
-				if (!dir.mkdir()) {
-					new Error("Could not make HPO files directory.\n"
-							+ "Try launching the application as administrator.", 
-							"IO Error",
-							JFrame.EXIT_ON_CLOSE);
-					return false;
-				}
-			}
-			assocfile = new File(".\\HPO\\"+timestamp+".txt");
+			assocfile = new File(".\\HPO\\"+timestamp+".assoc");
+			
+			// check if HPO file with this timestamp already exists
 			if (!assocfile.exists()) {
+				/* 
+				 * dggui.down contains the number of bytes that have been downloaded
+				 * and will be displayed on the applet when it is downloading the files,
+				 * to indicate some progress is being made.
+				 */
 				dggui.down = 0;
-				oldhpo = dir.listFiles();
-				_regx = Pattern.compile("(\\d+.txt)");
-				for (int i = 0; i < oldhpo.length; i++) {
-					_match = _regx.matcher(oldhpo[i].getName());
-					if (_match.matches()) {
-						oldhpo[i].delete();
-					}
+				
+				// oldfiles will contain the filenames for all files in the HPO directory 
+				oldfiles = dir.listFiles();
+				
+				for (File file : oldfiles) {
+					if (file.getName().endsWith(".obo")) 
+						if (!file.getName().startsWith(timestamp))
+							file.delete();
 				}
+				
+				// Create the file if it does not exist
+
 				assocfile.createNewFile();
-				assocurl = new URL("http://compbio.charite.de/hudson/job/"
+				fileurl = new URL("http://compbio.charite.de/hudson/job/"
 						+ "hpo.annotations.monthly/lastStableBuild/artifact/"
 						+ "annotation/ALL_SOURCES_ALL_FREQUENCIES_"
 						+ "diseases_to_genes_to_phenotypes.txt");
 				out = new FileWriter(assocfile);
-				assocstream = assocurl.openConnection().getInputStream(); 
+				istream = fileurl.openConnection().getInputStream(); 
 				in = new BufferedReader(
-						new InputStreamReader(assocstream));
+						new InputStreamReader(istream));
 				while ((buffer = in.readLine()) != null) { 
 					out.write(buffer+"\n");
 					dggui.down += buffer.length();
@@ -278,9 +219,12 @@ class DeltaGene {
 				dggui.downloading = false;
 				out.close();
 			}
-			return true;
-		} catch (IOException e) {
-			System.out.println(e.getStackTrace());
+			stop = System.currentTimeMillis();
+			time = stop - start;
+			System.out.println("(Down)loading association files took "+time+"millis");
+			return true;	
+		}catch (IOException e){
+			e.printStackTrace();
 			return false;
 		}
 	}
@@ -299,17 +243,7 @@ class DeltaGene {
 			});
 			
 			// The applet will try to use an older version of the association file if it is available.
-			if (!getLatestHPOFiles()) {
-				getLastHPOFile();
-				new Error("HPO file could not be dowloaded! Trying to use older version...",
-						"Download error",
-						JFrame.DISPOSE_ON_CLOSE);
-			}if (!getLatestAssocFiles()) {
-				getLastAssocFile();
-				new Error("Association file could not be dowloaded! Trying to use older version", 
-						"Download error",
-						JFrame.DISPOSE_ON_CLOSE);
-			}
+			getLatestFiles();
 			dggui.updateGUI(hpofile, assocfile);
 		}catch (Exception e) {
 			e.printStackTrace();
