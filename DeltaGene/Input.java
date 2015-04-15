@@ -694,7 +694,7 @@ class input extends Gui {
 			String pheno = null;
 			ArrayList<String> altid = new ArrayList<String>();
 			String definition = null;
-			long start, end, time;
+			long start, stop, time;
 			HPONumber _hpo = null;
 			HPONumber parentObject;
 			String parent;
@@ -742,9 +742,9 @@ class input extends Gui {
 				}
 			}
 			in.close();
-			end = System.currentTimeMillis();
-			time = end - start;
-			System.out.println("Building the HPO data took "+time+"ms");
+			stop = System.currentTimeMillis();
+			time = stop - start;
+			System.out.println("Building the HPO data took "+time+" millis");
 			data.remove(0);
 		}catch (IOException e) {
 			e.printStackTrace();
@@ -757,15 +757,30 @@ class input extends Gui {
 			String hpo;
 			String gene;
 			String line;
+			Boolean invalid = false;
+			long start, stop, time;
+			start = System.currentTimeMillis();
 			while ((line = in.readLine()) != null) {
 				if (line.contains("HP:")) {
 					hpo = line.substring(line.indexOf("HP:"), line.indexOf("\t", line.indexOf("HP:")));
 					gene = line.substring(line.indexOf("\t")+1, line.indexOf("\t", line.indexOf("\t")+1));
-					data.get(hpo).addGene(gene);
+					if (data.containsKey(hpo)) {
+						data.get(hpo).addGene(gene);
+					}else{
+						invalid = true;
+					}
 				}
 			}
-			
+			if (invalid)
+				new Error("Some genes were found with unknown HPO numbers,"
+						+ " the HPO data might be outdated or invalid!\n"
+						+ "Make sure your HPO files are up to date.",
+						"Attention",
+						JFrame.DISPOSE_ON_CLOSE);
 			in.close();
+			stop = System.currentTimeMillis();
+			time = stop - start;
+			System.out.println("Populating gene list took "+time+" millis");
 		}catch (IOException e) {
 			e.printStackTrace();
 		}
