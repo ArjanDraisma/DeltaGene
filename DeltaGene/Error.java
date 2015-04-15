@@ -16,17 +16,19 @@ public class Error implements ActionListener{
 	Error(String errmsg, String errtitle, int consequence) {
 		errframe = new JFrame(errtitle);
 		Container errcnt = new Container();
-		JTextArea errlbl = new JTextArea();
+		JTextArea errtxt = new JTextArea();
 		Button errbtn = new Button ("OK");
 		errframe.setContentPane(errcnt);
 		errframe.setPreferredSize(new Dimension(500, 250));
 		errframe.setDefaultCloseOperation(consequence);
 		errcnt.setLayout(new BoxLayout(errcnt, BoxLayout.PAGE_AXIS));
-		errlbl.setText(errmsg);
-		errlbl.setEditable(false);
-		errlbl.setPreferredSize(new Dimension(300,50));
-		errlbl.setBackground(errframe.getContentPane().getBackground());
-		errframe.getContentPane().add(errlbl);
+		errtxt.setText(errmsg);
+		errtxt.setEditable(false);
+		errtxt.setPreferredSize(new Dimension(300,50));
+		errtxt.setBackground(errframe.getContentPane().getBackground());
+		errtxt.setLineWrap(true);
+		errtxt.setWrapStyleWord(true);
+		errframe.getContentPane().add(errtxt);
 		errbtn.setPreferredSize(new Dimension(80, 30));
 		errbtn.addActionListener(this);
 		switch (consequence) {
