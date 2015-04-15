@@ -80,16 +80,14 @@ public class Gui extends Thread implements ActionListener, ItemListener {
 		
 		/**
 		 * This function shows the help window and it's specified page, as
-		 * passed into the method
+		 * passed into the method.
 		 * @param page the page to load, without directory or extension
 		 */
 		public void show(String page) {
 			try{
 				// This sets a URL to a specified html file
 				// Should be either 'index' or 'about'
-				System.out.println(DeltaGene.class.getResource("Help/"+page+".html"));
-				//URL u = new File("Help\\"+page+".html").toURI().toURL();
-				URL u = DeltaGene.class.getResource("Help\\"+page+".html");
+				URL u = DeltaGene.class.getResource("/Help/"+page+".html");
 				content.setPage(u);		// this sets the html file as the editorpane's content
 				helpframe.pack();
 				helpframe.setLocationRelativeTo(null); 	// this centers the help/about window
