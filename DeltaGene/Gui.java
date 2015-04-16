@@ -198,6 +198,7 @@ public class Gui extends Thread implements ActionListener, ItemListener {
 		JMenuItem exit = new JMenuItem("Exit");
 		JMenu toolsMenu = new JMenu("Tools");
 		browser = new JMenuItem("HPO Browser");
+		JMenuItem format = new JMenuItem("Format gene list");
 		JMenu helpMenu = new JMenu("Help");
 		JMenuItem help = new JMenuItem("Help");
 		JMenuItem about = new JMenuItem("About");
@@ -208,12 +209,15 @@ public class Gui extends Thread implements ActionListener, ItemListener {
 		fileMenu.add(exit);					// Adds exit option to the file menu
 		menuBar.add(toolsMenu);				
 		toolsMenu.add(browser);
+		toolsMenu.add(format);
 		menuBar.add(helpMenu);
 		exit.addActionListener(this);
 		exit.setActionCommand("exit");
 		browser.addActionListener(this);
 		browser.setActionCommand("browser");
 		browser.setEnabled(false);			// We do not want the user to open the HPO browser until the data is loaded
+		format.addActionListener(this);
+		format.setActionCommand("format");
 		help.addActionListener(this);
 		help.setActionCommand("help");
 		about.addActionListener(this);
@@ -318,13 +322,8 @@ public class Gui extends Thread implements ActionListener, ItemListener {
 	public void actionPerformed(ActionEvent e) {
 		if (e.getActionCommand().equals("submit")) {
 			SwingWorker<Void,Void> resworker = new SwingWorker<Void,Void>() {
-				//String[][] res = dgi.generateResults();
 				public Void doInBackground() {
 					dgi.getResults();
-					//if ((dgi.generateResults()) == null) {
-					//	new Error(dgi.getInputError(),
-					//			JFrame.DISPOSE_ON_CLOSE);
-					//}
 					return null;
 				}
 			};
@@ -335,6 +334,8 @@ public class Gui extends Thread implements ActionListener, ItemListener {
 			dgi.addInput(1,1);
 		}if (e.getActionCommand().equals("rem")) {
 			dgi.removeInput();
+		}if (e.getActionCommand().equals("format")) {
+			dgi.formatGenes();
 		}if (e.getActionCommand().equals("help")) {
 			new HelpClass("index");
 		}if (e.getActionCommand().equals("browser")) {
