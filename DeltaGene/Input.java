@@ -626,7 +626,7 @@ class input extends Gui {
 		 * @param inAL the array list where the results are added to
 		 */
 		public void parseUniqueGene(String genelist, ArrayList<String> inAL) {
-			String[] in = genelist.split("([\\s\\W\\n\\r]+)");
+			String[] in = genelist.split("([^A-Z0-9\\-]+)");
 			ArrayList<String> out = new ArrayList<String>();
 			for (String gene : in) {
 				if (!out.contains(gene)) {
