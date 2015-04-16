@@ -1028,6 +1028,15 @@ class input extends Gui {
 			return inputbox;
 		}
 		
+		/**
+		 * Returns the type of input in the inputbox.
+		 * 1: List of hpo numbers
+		 * 2: Single hpo number
+		 * 3: Gene symbols
+		 * 4: digits
+		 * 0: invalid
+		 * @return An int signifying the type of input
+		 */
 		int getInputType() {
 			String in = getInputText();
 			/*
@@ -1043,24 +1052,38 @@ class input extends Gui {
 					return 2;
 				}
 			}
+			int type = 0;
+			String[] lines = in.split("[\\n\\s]");
+			for (String line : lines) {
+				if (line.matches("[a-z]")) {
+					return 0;
+				}if (line.matches("[A-Z0-9\\-]+")) {
+					type = 3;
+				}if (line.matches("[\\d]{1,7}")) {
+					type = 4;
+				}
+			}
+			
+			return type;
+			
 			/*
 			 *  This pattern will match either a (list of) digits,
 			 *  gene symbols or anything else, 
 			 *  in that order, whichever comes first.
 			 */
-			Pattern _regx = Pattern.compile("((?:\\W*\\d{1,7})+)|((?:[A-Z][A-Z0-9]+.*?\\n?)+)|(.*)");
+			/*Pattern _regx = Pattern.compile("((?:\\W*\\d{1,7})+)|((?:[A-Z][A-Z0-9]+.*?\\n?)+)|(.*)");
 			Matcher _match = _regx.matcher(in);
 			if (_match.find()) {
 				/* (list of) genes. Gene symbols always begin with an uppercase letter.
 				 * Furthermore, Gene symbols only contain letters A-Z and numbers 0-9.
-				 */
+				 *
 				if (_match.group(2) != null){ 		
 					return 3;
 				}
 				
 				/* Just digits. This will be parsed as an HPO number as
 				 * long as the amount of digits in one number does not exceed 7
-				 */
+				 *
 				if (_match.group(1) != null) {
 					return 4;
 				}
@@ -1069,13 +1092,13 @@ class input extends Gui {
 				 *  Autocomplete tries to search when:
 				 *  - the user is typing and this is returned
 				 *  - the user's input is > 2 characters
-				 */ 
+				 *
 				else{							
 					return 0;
 				}
 			}else{
 				return 0;
-			}
+			}*/
 		}
 		
 		public Document getDocument() {
@@ -1185,6 +1208,22 @@ class input extends Gui {
 				}else if (desc.contains("tree:")) {
 					HPODATA.browser.show(desc.substring(5));
 				}
+			}
+		}
+		
+		public void makeGenelistUnique() {
+			if (getInputType() == 3) {
+				StringBuilder sb = new StringBuilder();
+				String[] in = getInputText().split("([^A-Z0-9\\-]+)");
+				HashSet<String> out = new HashSet<String>();
+				for (String gene : in) {
+					if (!out.contains(gene)) {
+						out.add(gene);
+						sb.append(gene);
+						sb.append(System.lineSeparator());
+					}
+				}
+				setInputText(sb.toString());
 			}
 		}
 	}
@@ -1749,12 +1788,13 @@ class input extends Gui {
 			input.clear();
 		}
 	}
-
-	input() {
-		inputs = new ArrayList<userinput>();
-		resultobject = new result();
-	}
 	
+	public void formatGenes() {
+		for (userinput input : inputs) {
+			input.makeGenelistUnique();
+		}
+	}
+
 	public void getResults() {
 		resultobject.generate(inputs);
 	}
@@ -1792,5 +1832,10 @@ class input extends Gui {
 
 	public HPOObject getData() {
 		return HPODATA;
+	}
+
+	input() {
+		inputs = new ArrayList<userinput>();
+		resultobject = new result();
 	}
 }
