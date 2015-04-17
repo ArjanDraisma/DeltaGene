@@ -194,7 +194,7 @@ class DeltaGene {
 				oldfiles = dir.listFiles();
 				
 				for (File file : oldfiles) {
-					if (file.getName().endsWith(".obo")) 
+					if (file.getName().endsWith(".assoc")) 
 						if (!file.getName().startsWith(timestamp))
 							file.delete();
 				}
