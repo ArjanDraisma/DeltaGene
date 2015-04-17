@@ -968,12 +968,10 @@ class input extends Gui {
 							num++;
 						}
 					}
-				}else{
-					return;
+					dropdown.show(num);
+					invoker.getInputBox().requestFocusInWindow();
 				}
 			}
-			dropdown.show(num);
-			invoker.getInputBox().requestFocusInWindow();
 		}
 		
 		@Override
