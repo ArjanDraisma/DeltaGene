@@ -59,8 +59,6 @@ import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map.Entry;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import javax.swing.event.DocumentListener;
 import javax.swing.event.DocumentEvent;
@@ -104,11 +102,16 @@ class input extends Gui {
 		class Browser implements KeyListener, 
 		MouseListener, ActionListener {
 			/**
-			 * JTreeplus extends JTree to add the collapseAll() method
+			 * HPOTree is an extended JTree that fixes a bug where 
+			 * expanding a large number of nodes takes a long time
+			 * to process
 			 */
 			class HPOTree extends JTree {
 				private static final long serialVersionUID = 1L;
-				
+
+				/**
+				 * @param node the root node
+				 */
 				HPOTree(DefaultMutableTreeNode node) {
 					super(node);
 					DefaultTreeCellRenderer renderer = new DefaultTreeCellRenderer() {
@@ -124,21 +127,27 @@ class input extends Gui {
 				
 				/**
 				 * Custom function to expand selected paths.
-				 * The only reason This function is
-				 * used instead of JTree's native functions is that this is
-				 * faster. With the native methods expanding 1500 elements
-				 * would take about a minute.
+				 * The only reason This function is used instead of Jtree's
+				 * native functions is that this is faster. Native methods
+				 * processing time increases exponentially with the amount
+				 * of elements to expand.
 				 */
 				public void expandPaths () {
 					
 				}
 				
+				/**
+				 * Collapses all nodes.
+				 */
 				public void collapseAll() {
 					for (int i = this.getRowCount()-1; i > 0; i--) {
 						this.collapseRow(i);
 					}
 				}
 				
+				/**
+				 * Expands all nodes
+				 */
 				public void expandAll() {
 					for (int i = this.getRowCount()-1; i > 0; i--) {
 						this.expandRow(i);
@@ -215,7 +224,6 @@ class input extends Gui {
 				bwindow.add(content, c);
 				
 				tree.addMouseListener(this);
-				//tree.setToggleClickCount(1);
 				tree.setExpandsSelectedPaths(true);
 				root.add(hpodata.getHPOHeirarchy("HP:0000001"));
 				jsp.setViewportView(tree);
@@ -242,8 +250,10 @@ class input extends Gui {
 			}
 			
 			public void show(String hpo, userinput input) {
-				//addbutton.setEnabled(true);
-				//addbutton.setActionCommand("add:"+input.getID());
+				if (input != null) {
+					addbutton.setEnabled(true);
+					addbutton.setActionCommand("add:"+input.getID());
+				}
 				tree.clearSelection();
 				tree.collapseAll();
 				for (TreePath path : find(root, hpo)) {
@@ -272,10 +282,12 @@ class input extends Gui {
 				treemenu.repaint();
 				treemenu.setVisible(true);
 			}
-		
+			/**
+			 * displays the right mouse button menu, containing a button
+			 * to list the genes
+			 */
 			@Override
 			public void mouseClicked(MouseEvent e) {
-				// TODO this function
 				if (e.getButton() == MouseEvent.BUTTON3) {
 					contextMenu(e.getLocationOnScreen());
 				}
@@ -296,7 +308,11 @@ class input extends Gui {
 			@Override
 			public void mouseReleased(MouseEvent e) {
 			}
-		
+			
+			/**
+			 * This enables the user to press enter in the search menu,
+			 * instead of having to click the search button explicitly
+			 */
 			@Override
 			public void keyReleased(KeyEvent e) {
 				if (e.getComponent().equals(search)) {
@@ -351,7 +367,7 @@ class input extends Gui {
 			private String hpoid = "Undefined";
 			private String phenotype = "Undefined";
 			private String definition = "Undefined";
-			private ArrayList<String> genes = new ArrayList<String>();
+			private HashSet<String> genes = new HashSet<String>();
 			private ArrayList<HPONumber> children = new ArrayList<HPONumber>();
 			
 			HPONumber (String hpo) {
@@ -461,10 +477,12 @@ class input extends Gui {
 			}
 			
 			/**
-			 * This function tries to find 
+			 * This function finds a child matching hpo in this hponumber's
+			 * children and, if recursive == true, this children's children. 
 			 * @param hpo	The @link{HPONumber} to search for
-			 * @param recursive	Recursively searches this HPO number's children for hpo 
-			 * @return true if hpo is a child of this HPO number. True if one of these children has hpo as a child and recursive = true
+			 * @param recursive	Recursively searches this HPO number's children
+			 * @return true if hpo is a child of this HPO number.
+			 * True if one of these children has hpo as a child and recursive = true
 			 */
 			public boolean containsChild(HPONumber hpo, boolean recursive) {
 				if (recursive) {
@@ -508,11 +526,13 @@ class input extends Gui {
 			}
 			
 			/**
-			 * Populates an ArrayList with this HPONumber's genes. Will not add duplicate genes
+			 * Populates an ArrayList with this HPONumber's genes.
+			 * Will not add duplicate genes
 			 * @see collectGenes
 			 * @return A collection of genes as strings
 			 */
-			public void getGenes(ArrayList<String> inAL, HashSet<String> set) {
+			public void getGenes(ArrayList<String> inAL,
+					HashSet<String> set) {
 					for (String gene : genes) {
 						if (!set.contains(gene)) {
 							set.add(gene);
@@ -532,7 +552,8 @@ class input extends Gui {
 		 * The data HashMap contains all instances of HPONumbers objects.
 		 * The key to each HPONumber is it's hpo id (HP:#######)
 		 */
-		private static HashMap<String, HPONumber> data = new HashMap<String, HPONumber>();
+		private static HashMap<String, HPONumber> data = 
+				new HashMap<String, HPONumber>();
 		public Browser browser;
 		
 		/**
@@ -674,12 +695,15 @@ class input extends Gui {
 				System.out.println();
 			}
 			String hpoin = hpo.substring(0, 10);
-			DefaultMutableTreeNode node = new DefaultMutableTreeNode(hpoin+" - "+data.get(hpoin).phenotype());
+			DefaultMutableTreeNode node = new DefaultMutableTreeNode(hpoin+
+					" - "+data.get(hpoin).phenotype());
 			for(HPONumber child : data.get(hpoin).getChildren()) {
 				if (child.getChildCount() > 0) {
 					node.add(getHPOHeirarchy(child.hpo()));
 				}else{
-					DefaultMutableTreeNode childnode = new DefaultMutableTreeNode(child.hpo()+" - "+child.phenotype());
+					DefaultMutableTreeNode childnode = 
+							new DefaultMutableTreeNode(child.hpo()+" - "+
+					child.phenotype());
 					node.add(childnode);
 				}
 			}
@@ -751,6 +775,12 @@ class input extends Gui {
 		}
 	}
 	
+	/**
+	 * This function populates the hponumbers with their genes.
+	 * Passes through the association file line-by-line and adds
+	 * a gene to each HPO number it comes across
+	 * @param inassoc the association file to be used
+	 */
 	private void populateHPOGenes(File inassoc) {
 		try {
 			BufferedReader in = new BufferedReader(new FileReader(inassoc));
@@ -762,18 +792,21 @@ class input extends Gui {
 			start = System.currentTimeMillis();
 			while ((line = in.readLine()) != null) {
 				if (line.contains("HP:")) {
-					hpo = line.substring(line.indexOf("HP:"), line.indexOf("\t", line.indexOf("HP:")));
-					gene = line.substring(line.indexOf("\t")+1, line.indexOf("\t", line.indexOf("\t")+1));
+					hpo = line.substring(line.indexOf("HP:"), line.indexOf("\t",
+							line.indexOf("HP:")));
+					gene = line.substring(line.indexOf("\t")+1, line.indexOf("\t",
+							line.indexOf("\t")+1));
 					if (data.containsKey(hpo)) {
 						data.get(hpo).addGene(gene);
 					}else{
+						// if a non-existant HPO term was found, we notify the user
 						invalid = true;
 					}
 				}
 			}
 			if (invalid)
 				new Error("Some genes were found with unknown HPO numbers,"
-						+ " the HPO data might be outdated or invalid!\n"
+						+ " the HPO data might be outdated or invalid.\n"
 						+ "Make sure your HPO files are up to date.",
 						"Attention",
 						JFrame.DISPOSE_ON_CLOSE);
@@ -873,7 +906,7 @@ class input extends Gui {
 			private static final long serialVersionUID = 1L;
 			public void show(int num) {
 				setPreferredSize(new Dimension(invoker.getSize().width, num*22));
-				setLocation(invoker.getLocationOnScreen().x, invoker.getLocationOnScreen().y+invoker.getSize().height);
+				setLocation(invoker.getInputBoxLocationOnScreen().x, invoker.getInputBoxLocationOnScreen().y+invoker.getSize().height);
 				pack();
 				revalidate();
 				repaint();
@@ -945,7 +978,11 @@ class input extends Gui {
 		
 		@Override
 		public void removeUpdate (DocumentEvent e) {
-			insertUpdate(e);
+			if (e.getLength() == e.getDocument().getLength()) {
+				return;
+			}else{
+				insertUpdate(e);
+			}
 		}
 		
 		public void actionPerformed(ActionEvent e) {
@@ -956,7 +993,10 @@ class input extends Gui {
 		@Override
 		public void changedUpdate(DocumentEvent e) {}
 	}
-	
+	/**
+	 * The userinput class takes care of the user's input, including
+	 * parsing the type of input, 
+	 */
 	class userinput implements DocumentListener, HyperlinkListener {
 		private JTextArea inputbox;
 		private JEditorPane infobox;
@@ -971,16 +1011,23 @@ class input extends Gui {
 			group = assignedgroup;
 			inputbox = new JTextArea();
 			inputdoc = inputbox.getDocument();
-			inputjsp = new JScrollPane(inputbox, JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED, JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
-			inputjsp.setPreferredSize(new Dimension(inputcontainer.getWidth()-10, getInputh()));
-			inputdoc.addDocumentListener(this);
+			inputjsp = new JScrollPane(inputbox,
+					JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED,
+					JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+			inputjsp.setPreferredSize(new Dimension(
+					inputcontainer.getWidth()-10, getInputh()));
+			inputdoc.addDocumentListener(this); 
 			inputbox.setFocusTraversalKeysEnabled(false);
 			infobox = new JEditorPane();
 			infobox.setContentType("text/html");
 			infobox.addHyperlinkListener(this);
-			infobox.setBackground(Color.getHSBColor(0, 0, (float)0.9));
-			infojsp = new JScrollPane(infobox, JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED, JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
-			infojsp.setPreferredSize(new Dimension(inputcontainer.getWidth()-10, getInfoh()));
+			infobox.setBackground(Color.getHSBColor(0, 0, 
+					(float)0.9));
+			infojsp = new JScrollPane(infobox, 
+					JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED, 
+					JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+			infojsp.setPreferredSize(new Dimension(
+					inputcontainer.getWidth()-10, getInfoh()));
 			infobox.setEditable(false);
 			inputcontainer.add(inputjsp);
 			inputcontainer.add(infojsp);
@@ -1030,114 +1077,128 @@ class input extends Gui {
 		
 		/**
 		 * Returns the type of input in the inputbox.
-		 * 1: List of hpo numbers
-		 * 2: Single hpo number
-		 * 3: Gene symbols
-		 * 4: digits
-		 * 0: invalid
+		 * <p>
+		 * <ol start=0>
+		 * <li>List of hpo numbers</li>
+		 * <li>Single hpo number</li>
+		 * <li>Gene symbols</li>
+		 * <li>Digits</li>
+		 * <li>Mixed input</li>
+		 * <li>invalid</li>
+		 * </ol>
+		 * </p>
 		 * @return An int signifying the type of input
 		 */
 		int getInputType() {
 			String in = getInputText();
 			/*
-			 * The first if checks if HP: occurs at all, in which case an HPO
-			 * number is assumed to be the input. The second if checks if
-			 * any other instances of HP: occur after the first, which signifies
-			 * a list of HPO numbers.
-			 */
-			if (in.toUpperCase().indexOf("HP:") > -1) { // check if HP: (case insensitive) occurs in the list
-				if (in.toUpperCase().substring(in.toUpperCase().indexOf("HP:")+1).contains("HP:")) { // check if it occurs again after the first occurence
+			 * The first if checks if HP: occurs at all, in which case 
+			 * an HPO number is assumed to be the input. The second if
+			 * checks if any other instances of HP: occur after the 
+			 * first, which signifies a list of HPO numbers.*/
+			 
+			if (in.toUpperCase().indexOf("HP:") > -1) {
+				if (in.toUpperCase().substring(in.toUpperCase().
+						indexOf("HP:")+1).contains("HP:")) { 
 					return 1;
 				}else{
 					return 2;
 				}
 			}
 			int type = 0;
-			String[] lines = in.split("[\\n\\s]");
+			// split lines by newline and whitespace
+			String[] lines = in.split("[\\n\\s]"); 
 			for (String line : lines) {
-				if (line.matches("[a-z]")) {
+				// any lowercase characters indicate no genelist or HPO num
+				if (line.matches("[a-z]")) { 
 					return 0;
+					/* if this line contains a multitude of capital letters,
+					 * digits or hyphens, return genelist */
 				}if (line.matches("[A-Z0-9\\-]+")) {
-					type = 3;
+					// if type has been set before, input is mixed.
+					if (type == 4) {
+						return 5; 
+					}else{
+						type = 3;
+					}
+					// if this contains one to seven digits, return digits
 				}if (line.matches("[\\d]{1,7}")) {
-					type = 4;
+					if (type == 3) {
+						return 5;
+					}else{
+						type = 4;
+					}
 				}
 			}
-			
 			return type;
-			
-			/*
-			 *  This pattern will match either a (list of) digits,
-			 *  gene symbols or anything else, 
-			 *  in that order, whichever comes first.
-			 */
-			/*Pattern _regx = Pattern.compile("((?:\\W*\\d{1,7})+)|((?:[A-Z][A-Z0-9]+.*?\\n?)+)|(.*)");
-			Matcher _match = _regx.matcher(in);
-			if (_match.find()) {
-				/* (list of) genes. Gene symbols always begin with an uppercase letter.
-				 * Furthermore, Gene symbols only contain letters A-Z and numbers 0-9.
-				 *
-				if (_match.group(2) != null){ 		
-					return 3;
-				}
-				
-				/* Just digits. This will be parsed as an HPO number as
-				 * long as the amount of digits in one number does not exceed 7
-				 *
-				if (_match.group(1) != null) {
-					return 4;
-				}
-				
-				/*  if all else fails, return 0. this is assumed to be invalid input.
-				 *  Autocomplete tries to search when:
-				 *  - the user is typing and this is returned
-				 *  - the user's input is > 2 characters
-				 *
-				else{							
-					return 0;
-				}
-			}else{
-				return 0;
-			}*/
 		}
 		
+		// gets the document associated with the inputbox
 		public Document getDocument() {
 			return inputdoc;
 		}
 		
-		public Point getLocationOnScreen() {
+		/**
+		 * Returns the location of the inputbox relative
+		 * to the screen
+		 * @return location of this input's inputbox relative to the scren
+		 */
+		public Point getInputBoxLocationOnScreen() {
 			return inputbox.getLocationOnScreen();
 		}
 		
+		// clears the inputbox of text
 		public void clear() {
 			inputbox.setText("");
 		}
 
 		@Override
 		public void changedUpdate(DocumentEvent e) {}
-
+		
+		/**
+		 *  This updates the infobox with information on the user's input 
+		 */
 		@Override
 		public void insertUpdate(DocumentEvent e) {
 			updateInfoBox(getInputType());
 		}
-
+		/**
+		 * @see insertUpdate
+		 */
 		@Override
 		public void removeUpdate(DocumentEvent e) {
 			insertUpdate(e);
 		}
-
+		
+		/**
+		 * returns the inputscrollpane. used in removing an input
+		 * @return the inputboxes' JScrollPane
+		 */
 		public JScrollPane getInputScrollPane() {
 			return inputjsp;
 		}
 
+		/**
+		 * returns the infoboxes' JScrollpane. used in removing an input
+		 * @return the infoboxes' JScrollPane
+		 */
 		public JScrollPane getInfoScrollPane() {
 			return infojsp;
 		}
 		
+		
+		/**
+		 * Updates the infobox based upon the type of input in the
+		 * inputbox.
+		 */
 		public void updateInfoBox() {
 			updateInfoBox(getInputType());
 		}
 		
+		/**
+		 * Updates the infobox based upon a particular type
+		 * @param type the type to assume
+		 */
 		public void updateInfoBox(int type) {
 			String pheno;
 			StringBuilder sb = new StringBuilder();
@@ -1148,15 +1209,26 @@ class input extends Gui {
 				break;
 			case 1:
 				sb.append("Type: List of HPO numbers:");
-				String[] hponums = getInputText().toUpperCase().split("([^A-Z0-9:]+)");
+				String[] hponums = getInputText().toUpperCase()
+						.split("([^A-Z0-9:]+)");
 				for (String hpo : hponums) {
 					pheno = HPODATA.getPhenotypeFromHPO(hpo);
 					if (pheno == null) {
-						sb.append("<br>"+hpo+" - No associated phenotype.");
+						sb.append("<br>"+hpo+" - "
+								+ "No associated phenotype.");
 					}else{
-						sb.append("<br>"+hpo+" - "+pheno+". <a href=\"genes:"
-					+hpo+"\">List genes</a> | <a href=\"tree:"+hpo
-					+"\">Show in browser</a>");
+						/* 
+						 * When either of these links in the infobox is
+						 * clicked, hyperlinkUpdate takes action based upon
+						 * the tree: or genes:  in front of an HPO number.
+						 * tree: lists the HPO numbers in the HPO browser
+						 * tree, genes: lists the genes associated with
+						 * this HPO number in a table
+						 */
+						sb.append("<br>"+hpo+" - "+pheno+". "
+								+ "<a href=\"genes:"+hpo+"\">List genes</a>"
+								+ " | <a href=\"tree:"+hpo
+								+"\">Show in browser</a>");
 					}
 				}
 				infobox.setText(sb.toString());
@@ -1165,14 +1237,18 @@ class input extends Gui {
 				String text = getInputText().toUpperCase();
 				if (text.length() == 10) {
 					if (HPODATA.getPhenotypeFromHPO(text) != null) {
-						infobox.setText("Type: Single HPO number:<br>"+text+" - "
-					+HPODATA.getPhenotypeFromHPO(text)+". <a href=\"genes:"+text
-					+"\">List genes</a> | <a href=\"tree:"+text+"\">Show in browser</a>");
+						infobox.setText("Type: Single HPO number:<br>"
+					+text+" - "+HPODATA.getPhenotypeFromHPO(text)+
+					" (<a href=\"genes:"+text
+					+"\">List genes</a> | <a href=\"tree:"
+					+text+"\">Show in browser</a>)");
 					}else{
-						infobox.setText("Type: Single HPO number:<br>"+text+" - no associated phenotype.");
+						infobox.setText("Type: Single HPO number:<br>"+
+					text+" - no associated phenotype.");
 					}
 				}else{
-					infobox.setText("Type: Single HPO number:<br>(Requires seven digits)");
+					infobox.setText("Type: Single HPO number:<br>"
+							+ "(Requires seven digits)");
 				}
 				break;
 			case 3:
@@ -1180,13 +1256,17 @@ class input extends Gui {
 				break;
 			case 4:
 				sb.append("Type: List of numbers (Parsed as HPO numbers):");
-				for (String hpo : HPODATA.parseNumbersAsHPO(inputbox.getText())) {
+				for (String hpo : HPODATA.parseNumbersAsHPO(
+						inputbox.getText())) {
 					if (hpo == null) {
 						hpo = "Invalid HPO number";
 					}
 					pheno = HPODATA.getPhenotypeFromHPO(hpo);
 					if (pheno != null) {
-						sb.append("<br>"+hpo+" - "+pheno+". <a href=\"genes:"+hpo+"\">List genes</a> | <a href=\"tree:"+hpo+"\">Show in browser</a>");
+						sb.append("<br>"+hpo+" - "+pheno
+								+" (<a href=\"genes:"+hpo
+								+"\">List genes</a> | <a href=\"tree:"
+								+hpo+"\">Show in browser</a>)");
 					}else{
 						sb.append("<br>"+hpo+" - Unknown phenotype.");
 					}
@@ -1198,7 +1278,14 @@ class input extends Gui {
 				break;
 			}
 		}
-
+		/**
+		 * When a link in an infobox is clicked, this will activate an
+		 * appropriate action based on it's prefix.
+		 * <ul>
+		 * <li>genes: List genes in table</li>
+		 * <li>tree: Show HPO term in hpo browser</li>
+		 * </ul>
+		 */
 		@Override
 		public void hyperlinkUpdate(HyperlinkEvent e) {
 			if (e.getEventType() == HyperlinkEvent.EventType.ACTIVATED) {
@@ -1211,6 +1298,10 @@ class input extends Gui {
 			}
 		}
 		
+		/**
+		 * This makes a list of genes in this inputbox unique, removing
+		 * any duplicate genes.
+		 */
 		public void makeGenelistUnique() {
 			if (getInputType() == 3) {
 				StringBuilder sb = new StringBuilder();
@@ -1228,19 +1319,28 @@ class input extends Gui {
 		}
 	}
 	
+	/**
+	 * The result class handles displaying, generating and exporting
+	 * the results
+	 */
 	class result implements ActionListener {
 		JFrame reswindow;
 		JScrollPane respanelsp;
 		JMenuBar menubar;
 		JMenu filemenu;
-		JMenuItem export;
+		JMenuItem export; 
 		Container controlcont;
 		Container rescont;
 		JTable restable;
+		String[] headers; // contains the headers for the JTable
+		String[][] results; // contains the data for the JTable
+		int[][] stats;
 		
-		String[] headers;
-		String[][] results;
-		
+		/**
+		 * This function displays the results passed by results and headers
+		 * @param results the results in the form of a two-dimensional string array
+		 * @param headers the headers in the form of a string array
+		 */
 		public void showResults(String[][] results, String[] headers) {
 			reswindow = new JFrame("Results");
 			restable = new JTable(results, headers);
