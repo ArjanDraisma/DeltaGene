@@ -1113,8 +1113,8 @@ class input extends Gui {
 				if (line.matches("[a-z]")) { 
 					return 0;
 					/* if this line contains a multitude of capital letters,
-					 * digits or hyphens, return genelist */
-				}if (line.matches("[A-Z0-9\\-]+")) {
+					 * return genelist */
+				}if (line.matches("[A-Z]+")) {
 					// if type has been set before, input is mixed.
 					if (type == 4) {
 						return 5; 
@@ -1451,7 +1451,11 @@ class input extends Gui {
 			}
 			System.out.println(oBSize);
 			if (oBSize == 0) {
-				setInputError("Input(s) B do not have any associated genes");
+				if (operator == LIST) {
+					setInputError("This phenotype has no associated genes");
+				}else{
+					setInputError("Input(s) B do not have any associated genes");
+				}
 				return;
 			}
 			
