@@ -4,7 +4,7 @@ DeltaGene is a simple program that compares a list of genes against a multitude 
 
 Support
 
-!!!I have no plans to maintain this code!!!
+!!!I have no plans to maintain this code after June 30, 2015!!!
 I may work on it as a hobby at some point, but other than that the 
 program is provided as is.
 
