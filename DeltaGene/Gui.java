@@ -44,7 +44,6 @@ import java.awt.event.ItemListener;
 import java.awt.FlowLayout;
 import java.awt.GridBagConstraints;
 import java.awt.Insets;
-import java.io.File;
 import java.io.IOException;
 import java.net.URL;
 
@@ -73,11 +72,33 @@ public class Gui extends Thread implements ActionListener, ItemListener {
 	 * The HelpClass manages and shows the help window, with the help pages
 	 * in the /Help/ directory.
 	 */
-	class HelpClass extends Gui implements HyperlinkListener {
+	class HelpClass implements HyperlinkListener {
 		JFrame helpframe = new JFrame("Help"); 		// This JFrame is the help window JFrame 
 		JEditorPane content = new JEditorPane();	// The content EditorPane will contain the help HTML
 		JScrollPane jsp;							// This is the scrollpane for the 'content' editorpane
 		
+		HelpClass(String page){
+			helpframe.setPreferredSize(window.getSize()); 	// this sets the size of the help window JFrame, which will be the same as the main window
+			jsp = new JScrollPane(content);				  	// this creates the JScrollPane and sets the content EditorPane as its viewing pane
+			content.setEditable(false);						// we do not want the user to be able to edit the EditorPane
+			content.addHyperlinkListener(this);				// this listens for click on hyperlinks, which are used as navigation in the help pages
+			helpframe.add(jsp);								// this adds the jscrollpane, which 'contains' the EditorPane to the help JFrame
+			show(page);
+		}
+		
+		/**
+		 * We load a new page if the user clicks a link in the help window.
+		 */
+		@Override
+		public void hyperlinkUpdate(HyperlinkEvent e) {
+			try {
+				if (e.getEventType() == HyperlinkEvent.EventType.ACTIVATED) {
+					content.setPage(e.getURL());
+				}
+			}catch (IOException ioe) {
+				ioe.printStackTrace();
+			}
+		}
 		/**
 		 * This function shows the help window and it's specified page, as
 		 * passed into the method.
@@ -100,28 +121,6 @@ public class Gui extends Thread implements ActionListener, ItemListener {
 				e.printStackTrace();
 			}
 		}
-		
-		HelpClass(String page){
-			helpframe.setPreferredSize(window.getSize()); 	// this sets the size of the help window JFrame, which will be the same as the main window
-			jsp = new JScrollPane(content);				  	// this creates the JScrollPane and sets the content EditorPane as its viewing pane
-			content.setEditable(false);						// we do not want the user to be able to edit the EditorPane
-			content.addHyperlinkListener(this);				// this listens for click on hyperlinks, which are used as navigation in the help pages
-			helpframe.add(jsp);								// this adds the jscrollpane, which 'contains' the EditorPane to the help JFrame
-			show(page);
-		}
-		/**
-		 * We load a new page if the user clicks a link in the help window.
-		 */
-		@Override
-		public void hyperlinkUpdate(HyperlinkEvent e) {
-			try {
-				if (e.getEventType() == HyperlinkEvent.EventType.ACTIVATED) {
-					content.setPage(e.getURL());
-				}
-			}catch (IOException ioe) {
-				ioe.printStackTrace();
-			}
-		}
 	}
 	
 	public static JFrame window;		// This is the main window. 
@@ -134,191 +133,13 @@ public class Gui extends Thread implements ActionListener, ItemListener {
 	private SpringLayout contentlayout;	// This will contain content layout
 	private BoxLayout inputslayout;		// this will contain inputs layout
 	private static input dgi;			// This will contain an instance of the input object
-	private static int inputh = 126;	// Height of the input box
-	private static int infoh = 92;		// Height of the info box
-	private static int inputpad = 10;	// padding between the inputbox and infobox
 	JMenuItem browser;					// this is the menu item for the browser window, which has to be disabled until the HPO database has been compiled
 	
-	/**
-	 * This function is called when an input is added or removed, and resizes 
-	 * the input container accordingly.
-	 */
-	public void resizeInputContainer() {
-		int ic = dgi.getInputCount();
-		inputcontainer.setPreferredSize(new Dimension((window.getContentPane().getWidth()-50), (inputh+infoh+(inputpad*2))*ic));
-		window.pack();
-		window.revalidate();
-		window.repaint();
+	Gui () {
+		createAndShowGUI();
+		showInputs();
 	}
 	
-	/**
-	 * Returns the info height
-	 * @return the infoboxes' height
-	 */
-	public int getInfoh() {
-		return infoh;
-	}
-	/**
-	 * Returns the input height
-	 * @return the inputboxes' height
-	 */
-	public int getInputh() {
-		return inputh;
-	}
-	/**
-	 * This function updates the downloadlabel with the amount of bytes downloaded.
-	 * @param b amount of bytes downloaded
-	 */
-	public void setDownloadLabelBytes(int b) {
-		downloadLabel.setText(Integer.toString(b));
-	}
-	/**
-	 * this function sets the update label text. Will be used to display
-	 * 'Downloading HPO/Association database' or 'Loading HPO data'
-	 * @param text the text to set the update label to
-	 */
-	public void setUpdateLabelText(String text) {
-		updateLabel.setText(text);
-	}
-	/**
-	 * removes the updatelabel from the window.
-	 */
-	public void removeUpdateLabel() {
-		window.getContentPane().remove(updateLabel);
-	}
-	/**
-	 * This function creates and shows the initial GUI. will contain the 
-	 * inputlabel and downloadlabel.
-	 */
-	public void createAndShowGUI() {
-		dgi = new input(); 							// Create an instance of the input class
-		window = new JFrame("DeltaGene");			// Creates a window, titled 'DeltaGene'
-		JMenuBar menuBar = new JMenuBar();
-		JMenu fileMenu = new JMenu("File");
-		JMenuItem exit = new JMenuItem("Exit");
-		JMenu toolsMenu = new JMenu("Tools");
-		browser = new JMenuItem("HPO Browser");
-		JMenuItem format = new JMenuItem("Format gene list");
-		JMenu helpMenu = new JMenu("Help");
-		JMenuItem help = new JMenuItem("Help");
-		JMenuItem about = new JMenuItem("About");
-
-		content = new Container();			// This container will contain the controls container and input container
-		content.setLayout(new BoxLayout(content, BoxLayout.PAGE_AXIS));
-		menuBar.add(fileMenu);				// Adds the file menu to the menu bar		
-		fileMenu.add(exit);					// Adds exit option to the file menu
-		menuBar.add(toolsMenu);				
-		toolsMenu.add(browser);
-		toolsMenu.add(format);
-		menuBar.add(helpMenu);
-		exit.addActionListener(this);
-		exit.setActionCommand("exit");
-		browser.addActionListener(this);
-		browser.setActionCommand("browser");
-		browser.setEnabled(false);			// We do not want the user to open the HPO browser until the data is loaded
-		format.addActionListener(this);
-		format.setActionCommand("format");
-		help.addActionListener(this);
-		help.setActionCommand("help");
-		about.addActionListener(this);
-		about.setActionCommand("about");
-		helpMenu.add(about);
-		helpMenu.add(help);
-		updateLabel = new JLabel();
-		downloadLabel = new JLabel();
-		window.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-		window.setPreferredSize(new Dimension(700,600));
-		window.setJMenuBar(menuBar);
-		window.setContentPane(content);
-		window.pack();
-		window.getContentPane().add(updateLabel);
-		window.getContentPane().add(downloadLabel);
-		window.pack();
-		window.setLocationRelativeTo(null);
-		window.setResizable(false);
-		window.setVisible(true);
-		SwingWorker<Void, Void> updateWorker = new SwingWorker<Void,Void>() {
-			public Void doInBackground() {
-				while (downloading) {
-					downloadLabel.setText("Downloaded "+down+"kB");
-				}
-				window.getContentPane().remove(downloadLabel);
-				return null;
-			}
-		};
-		updateWorker.execute();
-	}
-
-	public void updateGUI(File hpofile, File assocfile) {
-		downloading = false;
-		updateLabel.setText("Loading HPO terms...");
-		dgi.initialize(hpofile, assocfile);
-		removeUpdateLabel();
-		
-		contentlayout = new SpringLayout();	// create the layout manager for the content container
-		content.setLayout(contentlayout);
-		GridBagConstraints c = new GridBagConstraints();
-		JPanel controls = new JPanel(new FlowLayout());
-		inputcontainer = new Container();
-		inputslayout = new BoxLayout(inputcontainer, BoxLayout.PAGE_AXIS);
-		inputcontainer.setLayout(inputslayout);
-		JScrollPane inputssp = new JScrollPane(inputcontainer);
-		Button submitButton = new Button("Compare");
-		Button clearButton = new Button("Clear fields");
-		Button addButton = new Button("Add input");
-		Button remButton = new Button("Remove input");
-		JComboBox<String> operand;
-		String[] operators = {"Default", "AND", "NOT", "XOR"};
-		c.insets = new Insets(2,2,2,2);
-		
-		browser.setEnabled(true);
-		submitButton.addActionListener(this);
-		clearButton.addActionListener(this);
-		addButton.addActionListener(this);
-		remButton.addActionListener(this);
-		submitButton.setActionCommand("submit");
-		clearButton.setActionCommand("clear");
-		addButton.setActionCommand("add");
-		remButton.setActionCommand("rem");
-		controls.add(submitButton,c);
-		controls.add(clearButton,c);
-		controls.add(addButton,c);
-		controls.add(remButton,c);
-		operand = new JComboBox<String>(operators);
-		operand.addItemListener(this);
-		controls.add(operand);
-		c.insets.set(5, 5, 5, 5);
-		c.weighty = 0;
-		c.weightx = 1;
-		c.anchor = GridBagConstraints.NORTH;
-		c.fill = GridBagConstraints.HORIZONTAL;
-		controls.setBorder(BorderFactory.createDashedBorder(Color.gray));
-		controls.setPreferredSize(new Dimension(
-				window.getContentPane().getWidth()-10, 40));
-		
-		contentlayout.putConstraint(SpringLayout.WEST, controls, 5,
-				SpringLayout.WEST, window.getContentPane());
-		contentlayout.putConstraint(SpringLayout.NORTH, controls, 5,
-				SpringLayout.NORTH, window.getContentPane());
-		window.getContentPane().add(controls);
-		inputssp.setPreferredSize(new Dimension(
-				window.getContentPane().getWidth()-10,
-				window.getContentPane().getHeight()-controls.getHeight()-50));
-		inputssp.setHorizontalScrollBarPolicy(
-				JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
-		inputssp.setVerticalScrollBarPolicy(
-				JScrollPane.VERTICAL_SCROLLBAR_ALWAYS);
-		contentlayout.putConstraint(SpringLayout.WEST, inputssp, 5, 
-				SpringLayout.WEST, window.getContentPane());
-		contentlayout.putConstraint(SpringLayout.NORTH, inputssp, 5,
-				SpringLayout.SOUTH, controls);
-		window.getContentPane().add(inputssp);
-		window.revalidate();
-		window.repaint();
-		dgi.addInput(1,0);
-		dgi.addInput(1,1);
-	}
-
 	public void actionPerformed(ActionEvent e) {
 		if (e.getActionCommand().equals("submit")) {
 			SwingWorker<Void,Void> resworker = new SwingWorker<Void,Void>() {
@@ -346,7 +167,75 @@ public class Gui extends Thread implements ActionListener, ItemListener {
 			System.exit(0);
 		}
 	}
-
+	/**
+	 * This function creates and shows the initial GUI. will initially 
+	 * contain the inputlabel and downloadlabel.
+	 */
+	public void createAndShowGUI() {
+		// Creates the window for DeltaGene, titled 'DeltaGene'
+		window = new JFrame("DeltaGene");
+		/* The menubar will contain a number of dropdown menus
+		 * for opening specific HPO and association files, opening
+		 * the HPO browser and opening the help files.
+		 */
+		JMenuBar menuBar = new JMenuBar();
+		// The filemenu contains the open and exit button
+		JMenu fileMenu = new JMenu("File");
+		JMenuItem exit = new JMenuItem("Open");
+		JMenuItem open = new JMenuItem("Exit");
+		// The tools menu will contain the HPO Browser button
+		JMenu toolsMenu = new JMenu("Tools");
+		browser = new JMenuItem("HPO Browser");
+		JMenuItem format = new JMenuItem("Format gene list");
+		// The helpmenu will contain the controls to open help and about
+		JMenu helpMenu = new JMenu("Help");
+		JMenuItem help = new JMenuItem("Help");
+		JMenuItem about = new JMenuItem("About");
+		
+		/* the content container will contain the controls container and 
+		 * input container. 
+		 */
+		content = new Container();
+		// We use a boxlayout to align elements vertically using the PAGE_AXIS
+		content.setLayout(new BoxLayout(content, BoxLayout.PAGE_AXIS));
+		
+		// This adds all menus and their items to the menubar
+		menuBar.add(fileMenu);						
+		fileMenu.add(exit);	
+		fileMenu.add(open);
+		menuBar.add(toolsMenu);				
+		toolsMenu.add(browser);
+		toolsMenu.add(format);
+		menuBar.add(helpMenu);
+		helpMenu.add(about);
+		helpMenu.add(help);
+		
+		/* The buttons work through the use of actioncommands, and
+		 * are handled in actionPerformed
+		 */
+		exit.addActionListener(this);
+		exit.setActionCommand("exit");
+		browser.addActionListener(this);
+		browser.setActionCommand("browser");
+		//browser.setEnabled(false);
+		format.addActionListener(this);
+		format.setActionCommand("format");
+		help.addActionListener(this);
+		help.setActionCommand("help");
+		about.addActionListener(this);
+		about.setActionCommand("about");
+		
+		// GUI housekeeping
+		window.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+		window.setPreferredSize(new Dimension(700,600));
+		window.setJMenuBar(menuBar);
+		window.setContentPane(content);
+		window.pack();
+		window.setLocationRelativeTo(null);
+		window.setResizable(false);
+		window.setVisible(true);
+	}
+	
 	/*
 	 * (non-Javadoc) This will change the operator as it is selected from the combobox
 	 * @see java.awt.event.ItemListener#itemStateChanged(java.awt.event.ItemEvent)
@@ -367,6 +256,113 @@ public class Gui extends Thread implements ActionListener, ItemListener {
 			if (op.equals("XOR")) {
 				dgi.setOperator(input.XOR);
 			}
+		}
+	}
+	
+	/**
+	 * removes the updatelabel from the window.
+	 */
+	public void removeUpdateLabel() {
+		window.getContentPane().remove(updateLabel);
+	}
+	
+	/**
+	 * This function updates the downloadlabel with the amount of bytes downloaded.
+	 * @param b amount of bytes downloaded
+	 */
+	public void setDownloadLabelBytes(int b) {
+		downloadLabel.setText(Integer.toString(b));
+	}
+	
+	/**
+	 * this function sets the update label text. Will be used to display
+	 * 'Downloading HPO/Association database' or 'Loading HPO data'
+	 * @param text the text to set the update label to
+	 */
+	public void setUpdateLabelText(String text) {
+		updateLabel.setText(text);
+	}
+	
+	private void showInputs() {
+		try {
+			// TODO BEFORE INITIALIZING
+			// Create an instance of the input class
+			dgi = new input();
+			contentlayout = new SpringLayout();	// create the layout manager for the content container
+			content.setLayout(contentlayout);
+			GridBagConstraints c = new GridBagConstraints();
+			JPanel controls = new JPanel(new FlowLayout());
+			inputcontainer = new Container();
+			inputslayout = new BoxLayout(inputcontainer, BoxLayout.PAGE_AXIS);
+			
+			// TODO INITIALIZE
+			DeltaGene.pool.submit(new Runnable() {
+				@Override
+				public void run() {
+					dgi.initialize(window, inputcontainer);
+				}
+			});
+			
+			// TODO *WHILE* INITIALIZING
+			inputcontainer.setLayout(inputslayout);
+			JScrollPane inputssp = new JScrollPane(inputcontainer);
+			Button submitButton = new Button("Compare");
+			Button clearButton = new Button("Clear fields");
+			Button addButton = new Button("Add input");
+			Button remButton = new Button("Remove input");
+			JComboBox<String> operand;
+			String[] operators = {"Default", "AND", "NOT", "XOR"};
+			c.insets = new Insets(2,2,2,2);
+			
+			
+			submitButton.addActionListener(this);
+			clearButton.addActionListener(this);
+			addButton.addActionListener(this);
+			remButton.addActionListener(this);
+			submitButton.setActionCommand("submit");
+			clearButton.setActionCommand("clear");
+			addButton.setActionCommand("add");
+			remButton.setActionCommand("rem");
+			controls.add(submitButton,c);
+			controls.add(clearButton,c);
+			controls.add(addButton,c);
+			controls.add(remButton,c);
+			operand = new JComboBox<String>(operators);
+			operand.addItemListener(this);
+			controls.add(operand);
+			c.insets.set(5, 5, 5, 5);
+			c.weighty = 0;
+			c.weightx = 1;
+			c.anchor = GridBagConstraints.NORTH;
+			c.fill = GridBagConstraints.HORIZONTAL;
+			controls.setBorder(BorderFactory.createDashedBorder(Color.gray));
+			controls.setPreferredSize(new Dimension(
+					window.getContentPane().getWidth()-10, 40));
+			
+			contentlayout.putConstraint(SpringLayout.WEST, controls, 5,
+					SpringLayout.WEST, window.getContentPane());
+			contentlayout.putConstraint(SpringLayout.NORTH, controls, 5,
+					SpringLayout.NORTH, window.getContentPane());
+			window.getContentPane().add(controls);
+			inputssp.setPreferredSize(new Dimension(
+					window.getContentPane().getWidth()-10,
+					window.getContentPane().getHeight()-controls.getHeight()-50));
+			inputssp.setHorizontalScrollBarPolicy(
+					JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+			inputssp.setVerticalScrollBarPolicy(
+					JScrollPane.VERTICAL_SCROLLBAR_ALWAYS);
+			contentlayout.putConstraint(SpringLayout.WEST, inputssp, 5, 
+					SpringLayout.WEST, window.getContentPane());
+			contentlayout.putConstraint(SpringLayout.NORTH, inputssp, 5,
+					SpringLayout.SOUTH, controls);
+			window.getContentPane().add(inputssp);
+			window.revalidate();
+			window.repaint();
+			
+			dgi.addInput(1,0);
+			dgi.addInput(1,1);
+		}catch (Exception e) {
+			e.printStackTrace();
 		}
 	}
 }
