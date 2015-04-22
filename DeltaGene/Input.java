@@ -64,8 +64,9 @@ import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Hashtable;
-import java.util.Map.Entry;
+import java.util.TreeMap;
 import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -74,7 +75,11 @@ import javax.swing.event.DocumentListener;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.HyperlinkEvent;
 import javax.swing.event.HyperlinkListener;
+import javax.swing.event.DocumentEvent.ElementChange;
+import javax.swing.event.DocumentEvent.EventType;
 import javax.swing.text.Document;
+import javax.swing.text.Element;
+import javax.swing.text.PlainDocument;
 import javax.swing.tree.DefaultMutableTreeNode;
 import javax.swing.tree.DefaultTreeCellRenderer;
 import javax.swing.tree.TreePath;
@@ -196,17 +201,15 @@ class input {
 		keyHandler kh;
 		
 		userinput invoker;
-		Future<Hashtable<String, String>> futureACList;
-		Hashtable<String,String> ACList;
+		Future<TreeMap<String, String>> futureACList; // Thanks Fleur!
+		TreeMap<String,String> ACList;
 		
-		Autocomplete (Future<Hashtable<String,String>> faclist) {
+		Autocomplete (Future<TreeMap<String,String>> faclist) {
 			futureACList = faclist;
 			kh = new keyHandler();
 			dropdown = new acWindow();
 			dropdown.addFocusListener(kh);
 			dropdown.setVisible(false);
-			//phenos.addAll(keywords);
-			//Collections.sort(phenos);
 		}
 		
 		@Override
@@ -221,6 +224,8 @@ class input {
 			input.getInputBox().addKeyListener(kh);
 		}
 		
+		// changedupdate is not used on plainDocuments, as used by
+		// JTextArea
 		@Override
 		public void changedUpdate(DocumentEvent e) {}
 		
@@ -229,40 +234,82 @@ class input {
 			int len;
 			String s;
 			String hpo;
-			Document doc = e.getDocument();
+			Document doc;
 			JMenuItem jmitem;
 			int num = 0;
+			long timeout = System.currentTimeMillis()+5000;
 			
-			
+			doc = invoker.getDocument();
 			invoker.getInputBox().setComponentPopupMenu(dropdown);
 			dropdown.removeAll();
 			dropdown.setInvoker(invoker.getInputBox());
 			len = doc.getLength();
 			if (len > 2) {
-				if (ACList == null) {
-					//ACList = futureACList.get();
-				}
-				s = invoker.getText();
-				if (invoker.getInputType() == 0) {
-					for (String search : ACList.keySet()) {
-						if (search.toLowerCase().contains(s.toLowerCase())&&num<10) {
-							
-							//hpo = HPODATA.getHPOFromPhenotype(search);
-							hpo = ACList.get(search);
-							jmitem = new JMenuItem(search+" ("+hpo+")");
-							jmitem.setComponentPopupMenu(dropdown);
-							jmitem.addActionListener(this);
-							jmitem.addKeyListener(kh);
-							jmitem.setActionCommand(hpo);
-							jmitem.setEnabled(true);
-							jmitem.setOpaque(true);
-							dropdown.add(jmitem);
-							num++;
+				/* Checks if ACList is not null, the DocumentEvent is not
+				 * null, or whether the future ACList is done.
+				 * If the ACList is not null, the data is already available
+				 * for the dropdown menu.
+				 * 
+				 * If the DocumentEvent is null, this event was fired
+				 * manually. This occurs when the dropdown is visible when
+				 * the futureAC is about to be ready.
+				 * 
+				 * If futureACList is done, we can populate ACList.
+				 */
+				if (ACList != null || e == null || futureACList.isDone()) {
+					/* If ACList == null it still needs to be gotten from
+					 * the future object
+					 */
+					if (ACList == null) {
+						/* we will wait for ~5 seconds to get the ACList
+						 * when this event fires and the future object
+						 * is not done. This should only be relevant
+						 * when the event is forced to fire just before
+						 * the future object is done.
+						 */
+						while (!futureACList.isDone()) {
+							if (timeout < System.currentTimeMillis()) {
+								dropdown.setVisible(false);
+								return;
+							}
+						}
+						try {
+							// Retrieve the actual ACList
+							ACList = futureACList.get();
+							//Collections.sort
+						}catch (Exception exception) {
+							/* Something will have gone horribly wrong
+							 * if this exception is ever reached.
+							 */
+							exception.printStackTrace();
 						}
 					}
-					dropdown.show(num);
+					s = invoker.getText();
+					if (invoker.getInputType() == 0) {
+						for (String search : ACList.keySet()) {
+							if (search.toLowerCase().contains(s.toLowerCase())&&num<10) {
+								hpo = ACList.get(search);
+								jmitem = new JMenuItem(search+" ("+hpo+")");
+								jmitem.setComponentPopupMenu(dropdown);
+								jmitem.addActionListener(this);
+								jmitem.addKeyListener(kh);
+								jmitem.setActionCommand(hpo);
+								jmitem.setEnabled(true);
+								jmitem.setOpaque(true);
+								dropdown.add(jmitem);
+								num++;
+							}
+						}
+						dropdown.show(num);
+						invoker.getInputBox().requestFocusInWindow();
+					}
+				}else{
+					dropdown.add(new JMenuItem("Please wait..."));
+					dropdown.show(3);
 					invoker.getInputBox().requestFocusInWindow();
 				}
+			}else{
+				dropdown.setVisible(false);
 			}
 		}
 
@@ -273,6 +320,10 @@ class input {
 			}else{
 				insertUpdate(e);
 			}
+		}
+
+		public boolean isVisible() {
+			return dropdown.isVisible();
 		}
 	}
 	
@@ -1075,9 +1126,9 @@ class input {
 		 * contain meta information, such as age of onset.
 		 * @return a full ArrayList of phenotypes.
 		 */
-		public Hashtable<String, String> getACList() {
+		public TreeMap<String, String> getACList() {
 			
-			Hashtable<String, String> out = new Hashtable<String, String>();
+			TreeMap<String, String> out = new TreeMap<String, String>();
 			HashSet<String> set = new HashSet<String>();
 			for (HPONumber entry : data.values()) {
 				if (!set.contains(entry.phenotype())) {
@@ -1814,7 +1865,7 @@ class input {
 			infobox.setEditable(false);
 			parentContainer.add(inputjsp);
 			parentContainer.add(infojsp);
-			//TODO ac.add(this);
+			ac.add(this);
 			updateInfoBox();
 		}
 		
@@ -2042,7 +2093,7 @@ class input {
 						/* 
 						 * When either of these links in the infobox is
 						 * clicked, hyperlinkUpdate takes action based upon
-						 * the tree: or genes:  in front of an HPO number.
+						 * the tree: or genes:  prefix of a HPO number.
 						 * tree: lists the HPO numbers in the HPO browser
 						 * tree, genes: lists the genes associated with
 						 * this HPO number in a table
@@ -2236,23 +2287,32 @@ class input {
 		};
 		updateWorker.execute();
 		
-		HPOFILES.LoadFiles();
-		HPODATA.build(this);
 		
-		/*ac = new Autocomplete(DeltaGene.pool.submit(new Callable<Hashtable<String,String>>() {
-			public Hashtable<String,String> call () {
+		ac = new Autocomplete(DeltaGene.pool.submit(new Callable<TreeMap<String,String>>() {
+			public TreeMap<String,String> call () {
 				try {
-					if (HPODATA.getState() != HPOObject.READY) {
-						System.out.println("Waiting for HPODATA to ");
-						wait();
+					while (HPODATA.getState() != HPOObject.READY) {
+						Thread.sleep(100);
 					}
-					return null;
+					if (ac.isVisible()) {
+						SwingWorker<Void, Void> refreshWorker = new SwingWorker<Void,Void>() {
+							public Void doInBackground() {
+								ac.insertUpdate(null);
+								return null;
+							}
+						};
+						refreshWorker.execute();
+					}
+					return HPODATA.getACList();
 				}catch (Exception e) {
 					e.printStackTrace();
 					return null;
 				}
 			}
-		}));*/
+		}));
+		
+		HPOFILES.LoadFiles();
+		HPODATA.build(this);
 	}
 	
 	void removeInput() {
