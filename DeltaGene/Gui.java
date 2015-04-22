@@ -49,6 +49,7 @@ import java.net.URL;
 
 import javax.swing.BorderFactory;
 import javax.swing.BoxLayout;
+import javax.swing.ImageIcon;
 import javax.swing.JComboBox;
 import javax.swing.JEditorPane;
 import javax.swing.JFrame;
@@ -174,6 +175,7 @@ public class Gui extends Thread implements ActionListener, ItemListener {
 	public void createAndShowGUI() {
 		// Creates the window for DeltaGene, titled 'DeltaGene'
 		window = new JFrame("DeltaGene");
+		window.setIconImage(new ImageIcon(DeltaGene.class.getResource("/icon.png")).getImage());
 		/* The menubar will contain a number of dropdown menus
 		 * for opening specific HPO and association files, opening
 		 * the HPO browser and opening the help files.
