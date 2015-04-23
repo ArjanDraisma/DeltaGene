@@ -111,7 +111,6 @@ import javax.swing.WindowConstants;
  * This class handles input from the user, generating headers and generating results.
  */
 class input {
-	
 	class Autocomplete implements DocumentListener, ActionListener {
 		class acWindow extends JPopupMenu {
 			private static final long serialVersionUID = 1L;
@@ -2279,7 +2278,7 @@ class input {
 					parentWindow.setTitle("DeltaGene - Downloading HPO/Association files ("+HPOFILES.getDown()+"kB)");
 				}
 				while (!HPODATA.isReady()) {
-					parentWindow.setTitle("DeltaGene - Building HPO Database");
+					parentWindow.setTitle("DeltaGene - Building HPO Database...");
 				}
 				parentWindow.setTitle("DeltaGene");
 				return null;
@@ -2291,7 +2290,7 @@ class input {
 		ac = new Autocomplete(DeltaGene.pool.submit(new Callable<TreeMap<String,String>>() {
 			public TreeMap<String,String> call () {
 				try {
-					while (HPODATA.getState() != HPOObject.READY) {
+					while (HPODATA.getState() < HPOObject.LOAD_ASSOC) {
 						Thread.sleep(100);
 					}
 					if (ac.isVisible()) {
