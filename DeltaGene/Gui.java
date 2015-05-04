@@ -53,7 +53,6 @@ import javax.swing.ImageIcon;
 import javax.swing.JComboBox;
 import javax.swing.JEditorPane;
 import javax.swing.JFrame;
-import javax.swing.JLabel;
 import javax.swing.JMenu;
 import javax.swing.JMenuBar;
 import javax.swing.JMenuItem;
@@ -61,15 +60,19 @@ import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.SpringLayout;
 import javax.swing.SwingWorker;
+import javax.swing.WindowConstants;
 import javax.swing.event.HyperlinkEvent;
 import javax.swing.event.HyperlinkListener;
 
 
 /**
- * The gui class provides the input and results window.
+ * @author ArjanDraisma
+ * The Gui class handles the creation of the main window
+ * and the instantiation of other classes.
  */
 public class Gui extends Thread implements ActionListener, ItemListener {
 	/**
+	 * @author ArjanDraisma
 	 * The HelpClass manages and shows the help window, with the help pages
 	 * in the /Help/ directory.
 	 */
@@ -88,7 +91,7 @@ public class Gui extends Thread implements ActionListener, ItemListener {
 		}
 		
 		/**
-		 * We load a new page if the user clicks a link in the help window.
+		 * load a new page if the user clicks a link in the help window.
 		 */
 		@Override
 		public void hyperlinkUpdate(HyperlinkEvent e) {
@@ -102,23 +105,28 @@ public class Gui extends Thread implements ActionListener, ItemListener {
 		}
 		/**
 		 * This function shows the help window and it's specified page, as
-		 * passed into the method.
+		 * passed by hyperlinkUpdate() above
 		 * @param page the page to load, without directory or extension
 		 */
 		public void show(String page) {
 			try{
-				// This sets a URL to a specified html file
-				// Should be either 'index' or 'about'
+				/* This sets a URL to a specified html file
+				 * Should be either 'index' or 'about'. Directory and
+				 * extension will be added.
+				 */
 				URL u = DeltaGene.class.getResource("/Help/"+page+".html");
 				content.setPage(u);		// this sets the html file as the editorpane's content
-				helpframe.pack();
+				helpframe.pack();		
 				helpframe.setLocationRelativeTo(null); 	// this centers the help/about window
 				helpframe.setVisible(true);
 			}catch (IOException e){
-				// Throw an error if the page files are missing or cannot be opened.
-				new Error("Could not open help files.\nThe help files are either missing or administrator privileges are needed.",
+				/* Throw an error if the page files are missing or cannot be opened.
+				 * Considering the help files are packed into the .jar, this really
+				 * should not happen.
+				 */
+				new Error("Could not open help files.", 
 						"Help error",
-						JFrame.DISPOSE_ON_CLOSE);
+						WindowConstants.DISPOSE_ON_CLOSE);
 				e.printStackTrace();
 			}
 		}
@@ -127,8 +135,6 @@ public class Gui extends Thread implements ActionListener, ItemListener {
 	public static JFrame window;		// This is the main window. 
 	public static Container content;	// This is the root JPanel
 	public static Container inputcontainer;	// This is the container that will hold the input fields and information boxes
-	private JLabel updateLabel;			// This is the label which appears when DeltaGene downloads the HPO and gene association files
-	private JLabel downloadLabel;		// This is the label that will hold the amount of bytes downloaded, so that the user knows progress is being made
 	public int down;					// The amount of bytes downloaded, to be used in the downloadlabel.
 	public boolean downloading = true;	// When this is set to false, the program will remove the downloadLabel	
 	private SpringLayout contentlayout;	// This will contain content layout
@@ -136,12 +142,20 @@ public class Gui extends Thread implements ActionListener, ItemListener {
 	private static input dgi;			// This will contain an instance of the input object
 	JMenuItem browser;					// this is the menu item for the browser window, which has to be disabled until the HPO database has been compiled
 	
+	// the constructor class builds the main window and adds the inputs
 	Gui () {
 		createAndShowGUI();
 		showInputs();
 	}
 	
+	/*
+	 * (non-Javadoc)
+	 * @see java.awt.event.ActionListener#actionPerformed(java.awt.event.ActionEvent)
+	 */
 	public void actionPerformed(ActionEvent e) {
+		/* When the user submits the inputs for processing,
+		 * a new thread will process and show the results
+		 */
 		if (e.getActionCommand().equals("submit")) {
 			SwingWorker<Void,Void> resworker = new SwingWorker<Void,Void>() {
 				public Void doInBackground() {
@@ -169,8 +183,7 @@ public class Gui extends Thread implements ActionListener, ItemListener {
 		}
 	}
 	/**
-	 * This function creates and shows the initial GUI. will initially 
-	 * contain the inputlabel and downloadlabel.
+	 * This function creates and shows the main gui window
 	 */
 	public void createAndShowGUI() {
 		// Creates the window for DeltaGene, titled 'DeltaGene'
@@ -238,8 +251,8 @@ public class Gui extends Thread implements ActionListener, ItemListener {
 		window.setVisible(true);
 	}
 	
-	/*
-	 * (non-Javadoc) This will change the operator as it is selected from the combobox
+	/* 
+	 * (non-Javadoc) 
 	 * @see java.awt.event.ItemListener#itemStateChanged(java.awt.event.ItemEvent)
 	 */
 	@Override
@@ -261,33 +274,9 @@ public class Gui extends Thread implements ActionListener, ItemListener {
 		}
 	}
 	
-	/**
-	 * removes the updatelabel from the window.
-	 */
-	public void removeUpdateLabel() {
-		window.getContentPane().remove(updateLabel);
-	}
-	
-	/**
-	 * This function updates the downloadlabel with the amount of bytes downloaded.
-	 * @param b amount of bytes downloaded
-	 */
-	public void setDownloadLabelBytes(int b) {
-		downloadLabel.setText(Integer.toString(b));
-	}
-	
-	/**
-	 * this function sets the update label text. Will be used to display
-	 * 'Downloading HPO/Association database' or 'Loading HPO data'
-	 * @param text the text to set the update label to
-	 */
-	public void setUpdateLabelText(String text) {
-		updateLabel.setText(text);
-	}
-	
 	private void showInputs() {
 		try {
-			// TODO BEFORE INITIALIZING
+			// Before initializing
 			// Create an instance of the input class
 			dgi = new input();
 			contentlayout = new SpringLayout();	// create the layout manager for the content container
@@ -297,7 +286,7 @@ public class Gui extends Thread implements ActionListener, ItemListener {
 			inputcontainer = new Container();
 			inputslayout = new BoxLayout(inputcontainer, BoxLayout.PAGE_AXIS);
 			
-			// TODO INITIALIZE
+			// initialize 
 			DeltaGene.pool.submit(new Runnable() {
 				@Override
 				public void run() {
@@ -305,7 +294,7 @@ public class Gui extends Thread implements ActionListener, ItemListener {
 				}
 			});
 			
-			// TODO *WHILE* INITIALIZING
+			// do while initializing
 			inputcontainer.setLayout(inputslayout);
 			JScrollPane inputssp = new JScrollPane(inputcontainer);
 			Button submitButton = new Button("Compare");

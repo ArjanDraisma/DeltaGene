@@ -63,10 +63,8 @@ import java.util.Collections;
 import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Hashtable;
 import java.util.TreeMap;
 import java.util.concurrent.Callable;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -75,15 +73,9 @@ import javax.swing.event.DocumentListener;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.HyperlinkEvent;
 import javax.swing.event.HyperlinkListener;
-import javax.swing.event.DocumentEvent.ElementChange;
-import javax.swing.event.DocumentEvent.EventType;
 import javax.swing.text.Document;
-import javax.swing.text.Element;
-import javax.swing.text.PlainDocument;
 import javax.swing.tree.DefaultMutableTreeNode;
-import javax.swing.tree.DefaultTreeCellRenderer;
 import javax.swing.tree.TreePath;
-import javax.swing.Icon;
 import javax.swing.JButton;
 import javax.swing.JEditorPane;
 import javax.swing.JFileChooser;
@@ -108,15 +100,23 @@ import javax.swing.WindowConstants;
 //import DeltaGene.input.Browser.HPOTree;
 
 /**
+ * @author ArjanDraisma
  * This class handles input from the user, generating headers and generating results.
  */
 class input {
 	class Autocomplete implements DocumentListener, ActionListener {
+		/**
+		 * @author ArjanDraisma
+		 * acWindow implements a custom version of show, tailored to the
+		 * amount of autocomplete items that have been found.
+		 */
 		class acWindow extends JPopupMenu {
 			private static final long serialVersionUID = 1L;
 			public void show(int num) {
-				setPreferredSize(new Dimension(invoker.getSize().width, num*22));
-				setLocation(invoker.getInputBoxLocationOnScreen().x, invoker.getInputBoxLocationOnScreen().y+invoker.getSize().height);
+				setPreferredSize(new Dimension(invoker.getSize().width,
+						num*22));
+				setLocation(invoker.getInputBoxLocationOnScreen().x,
+						invoker.getInputBoxLocationOnScreen().y+invoker.getSize().height);
 				pack();
 				revalidate();
 				repaint();
@@ -200,7 +200,7 @@ class input {
 		keyHandler kh;
 		
 		userinput invoker;
-		Future<TreeMap<String, String>> futureACList; // Thanks Fleur!
+		Future<TreeMap<String, String>> futureACList;
 		TreeMap<String,String> ACList;
 		
 		Autocomplete (Future<TreeMap<String,String>> faclist) {
@@ -283,7 +283,7 @@ class input {
 							exception.printStackTrace();
 						}
 					}
-					s = invoker.getText();
+					s = invoker.getInputText();
 					if (invoker.getInputType() == 0) {
 						for (String search : ACList.keySet()) {
 							if (search.toLowerCase().contains(s.toLowerCase())&&num<10) {
@@ -563,19 +563,11 @@ class input {
 				 */
 				HPOTree(DefaultMutableTreeNode node) {
 					super(node);
-					DefaultTreeCellRenderer renderer = new DefaultTreeCellRenderer() {
-						private static final long serialVersionUID = -5119614872016462922L;
-						
-					};
-					Icon hpoicon = null;
-					renderer.setLeafIcon(hpoicon);
-					renderer.setClosedIcon(hpoicon);
-					renderer.setOpenIcon(hpoicon);
 					
 				}
 				
 				/**
-				 * Collapses all nodes.
+				 * Collapses all (opened) nodes.
 				 */
 				public void collapseAll() {
 					for (int i = this.getRowCount()-1; i > 0; i--) {
@@ -590,17 +582,6 @@ class input {
 					for (int i = this.getRowCount()-1; i > 0; i--) {
 						this.expandRow(i);
 					}
-				}
-				
-				/**
-				 * Custom function to expand selected paths.
-				 * The only reason This function is used instead of Jtree's
-				 * native functions is that this is faster. Native methods
-				 * processing time increases exponentially with the amount
-				 * of elements to expand.
-				 */
-				public void expandPaths () {
-					
 				}
 			}
 			
@@ -659,13 +640,6 @@ class input {
 				content.add(jsp, c);
 				content.setMaximumSize(null);
 				
-				/*
-				 * I'm putting these constraint sets one one line to make things
-				 * a little tidier. I am aware this is probably not up to 
-				 * standards or might hamper readability, but I am a bit tired
-				 * of weird looking code with 14-character constraint sets 
-				 * spread over 10 lines.
-				 */
 				c.fill = GridBagConstraints.BOTH;
 				c.gridy = 0; c.gridx = 0; c.weightx = 1; c.weighty = 0.05;
 				bwindow.add(controls, c);
@@ -1035,7 +1009,7 @@ class input {
 				new Error("A critical error occured! Try running the application as administrator.\n"
 						+ "If the issue persists, report the issue with the data below: \n\n"
 						+ e.getStackTrace(), "Critical error", WindowConstants.EXIT_ON_CLOSE);
-				// TODO: Cleanup function for these kinds of problems
+				// TODO: Cleanup for these kinds of problems
 			}
 		}
 		
@@ -1208,10 +1182,23 @@ class input {
 			String hpo;
 			String gene;
 			String line;
+			int HPOColumn;
+			int GeneColumn;
 			Boolean invalid = false;
 			long start, stop, time;
 			start = System.currentTimeMillis();
+			// TODO This section of populateHPOGenes!
 			while ((line = in.readLine()) != null) {
+				if (line.contains("#Format: ")) {
+					String[] format = line.substring(9).split("<tab>");
+						for (int i = 0; i < format.length; i++) {
+							if (format[i].equals("HPO-ID")) {
+								HPOColumn = i;
+							}if (format[i].equals("gene-symbol")) {
+								GeneColumn = i;
+							}
+						}
+				}
 				if (line.contains("HP:")) {
 					hpo = line.substring(line.indexOf("HP:"), line.indexOf("\t",
 							line.indexOf("HP:")));
@@ -1418,6 +1405,7 @@ class input {
 		public void generate(ArrayList<userinput> in) {
 			headers = null;
 			results = null;
+			
 			getHeaders(in);
 			generateResults(in);
 			if (results == null) {
@@ -1427,6 +1415,10 @@ class input {
 			showResults(results, headers);
 		}
 		
+		/**
+		 *  
+		 * @param hpo
+		 */
 		public void generate(String hpo) {
 			headers = null;
 			results = null;
@@ -1446,7 +1438,10 @@ class input {
 		 * generateResults will compare all genes associated with or input in the inputboxes by the user.
 		 * The size of the array that is returned depends on the amount of genes left at the end of the comparison,
 		 * and the operator that is used.
-		 * @return a multi-dimensional array where String[x] is a gene and String[][x] is an input.
+		 * @param oA Single-dimensional list of genes from the A input
+		 * @param oB Multi-dimensional list of genes from the B input(s)
+		 * @param operator Operator to use.
+		 * @return a multi-dimensional array where String[x][] is a gene and String[][x] is an input.
 		 */
 		public void generateResults(ArrayList<String> oA, ArrayList<ArrayList<String>> oB, int operator) {
 			String[][] outArray = null;
@@ -1947,7 +1942,6 @@ class input {
 			 * an HPO number is assumed to be the input. The second if
 			 * checks if any other instances of HP: occur after the 
 			 * first, which signifies a list of HPO numbers.*/
-			 
 			if (in.toUpperCase().indexOf("HP:") > -1) {
 				if (in.toUpperCase().substring(in.toUpperCase().
 						indexOf("HP:")+1).contains("HP:")) { 
@@ -1956,40 +1950,30 @@ class input {
 					return 2;
 				}
 			}
-			int type = 0;
 			// split lines by newline and whitespace
 			String[] lines = in.split("[\\n\\s]"); 
 			for (String line : lines) {
 				// any lowercase characters indicate no genelist or HPO num
 				if (line.matches("[a-z]")) { 
 					return 0;
-					/* if this line contains a multitude of capital letters,
-					 * return genelist */
-				}if (line.matches("[A-Z]+")) {
-					// if type has been set before, input is mixed.
-					if (type == 4) {
-						return 5; 
-					}else{
-						type = 3;
-					}
-					// if this contains one to seven digits, return digits
-				}if (line.matches("[\\d]{1,7}")) {
-					if (type == 3) {
-						return 5;
-					}else{
-						type = 4;
-					}
+					
+					/* if the line starts with a capital letter
+					 * and has a mixture of capital letters and numbers
+					 * thereafter, return list of genes */
+				}if (line.matches("[A-Z][A-Z0-9]+")) {
+					return 3;
+					// if the line contains only digits, return digits
+				}if (line.matches("[\\d]+")) {
+					return 4;
 				}
 			}
-			return type;
+			// if all else fails, return invalid
+			return 0;
 		}
 		
+		// returns the size of this inputs' inputbox
 		Dimension getSize() {
 			return inputbox.getSize();
-		}
-		
-		String getText() {
-			return getInputText();
 		}
 
 		/**
@@ -2195,19 +2179,6 @@ class input {
 		parentWindow.revalidate();
 		parentWindow.repaint();
 	}
-	
-	/**
-	 * This function returns an integer which signifies the type of input
-	 * the user has typed into the input box.
-	 * <ol>
-	 * <li>List of HPO numbers</li>
-	 * <li>Single HPO number</li>
-	 * <li>List of genes</li>
-	 * <li>Digits to be parsed as HPO number</li>
-	 * </ol>
-	 * @param in the user's input to be parsed.
-	 * @return an integer signifying the input type, 0 if unrecognized input.
-	 */
 	
 	public void clearInputs() {
 		for (userinput input : inputs) {

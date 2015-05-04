@@ -43,34 +43,79 @@ import java.util.concurrent.Executors;
 import javax.swing.UIManager;
 import javax.swing.WindowConstants;
 
-
+/**
+ * @author ArjanDraisma
+ * The main class for deltagene. Does little else besides set the 
+ * look and feel of swing, parse command line arguments and create the gui
+ */
 class DeltaGene {
 	
-	public static Gui dggui;
+	public static Gui dggui;				// instance of the Gui class
+	// these constants are used throughout multiple classes
 	public final static int INPUTH = 126;	// Height of the input box
 	public final static int INFOH = 92;		// Height of the info box
 	public final static int INPUTPAD = 10;	// padding between the inputbox and infobox
 	public final static ExecutorService pool = Executors.newFixedThreadPool(5);
+	public static boolean enableGui = true;
 	
 	public static void main(String[] args) {
 		try {
 			// We will try to use the system's native look and feel for UI
 			UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
 			
-			// Any updates to the UI must happen on the event dispatching thread.
-			javax.swing.SwingUtilities.invokeAndWait(new Runnable() {
-				public void run() {
-					dggui = new Gui();
-					//dggui.createAndShowGUI();
-					//dggui.updateGUI();
+			for (int i = 0; i < args.length; i++) {
+				String arg = args[i];
+				if (arg.equals("-help")||arg.equals("-h")) {
+					System.out.println("DeltaGene is a simple program that"
+							+ "compares a list of genes against a multitude"
+							+ "of lists. Includes a connection to the Human"
+							+ "Phenotype Ontology database.\n\n"
+							+ "Usage: java -jar DeltaGene -a [\"input\"] "
+							+ "-b [\"input\",\"input\"] "
+							+ "-e <output path> -fh <hpo file path> "
+							+ "-fa <association file path> -nogui -verbose\n\n"
+							+ "input can be:"
+							+ "HPO number(s): [HP:0000021,HP:0000012]\n"
+							+ "Plain number(s): [12] for HP:0000012\n"
+							+ "(list of) gene(s): [TTN,DSP]\n\n"
+							+ "Options:\n"
+							+ "-a: the A group input (singular) "
+							+ "-export: Export a comma-seperated file with"
+							+ "results to the specified location. implies "
+							+ "-nogui\n"
+							+ "-h, -help: Display this help text\n"
+							+ "-nogui: disble gui display\n"
+							+ "-op: operator. Can be DEFAULT,AND,NOT,XOR and LIST "
+							+ "Note: List only handles the -b input."
+							+ "-verbose: gives verbose output of the process");
+					return;
+				}if (arg.equals("-nogui")) {
+					enableGui = false;
 				}
-			});
+			}
+			
+			if (enableGui) {
+				// Any updates to the UI must happen on the event dispatching thread
+				javax.swing.SwingUtilities.invokeAndWait(new Runnable() {
+					public void run() {
+						dggui = new Gui();
+					}
+				});
+			}else{
+				// TODO print command line output, export to file
+				//input dgi = new input();
+				
+			}
 		}catch (Exception e) {
 			e.printStackTrace();
+			/* Something went terribly wrong if this ever occurs. 
+			 * Could happen when something interrupts invokeAndWait above,
+			 * is not expected to ever happen.
+			 */
 			new Error("Unspecified error! Restart the program as administrator and try again.\n"
 					+ "If this problem persists, report an issue with the following text:\n\n"
 					+ "Stack trace:\n"
-					+e.getStackTrace(),"Critical error!",WindowConstants.EXIT_ON_CLOSE);
+					+e.getStackTrace(),"Critical error!", WindowConstants.EXIT_ON_CLOSE);
 		}
 	}
 }
