@@ -57,7 +57,11 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.lang.reflect.InvocationTargetException;
+import java.net.MalformedURLException;
 import java.net.URL;
+import java.sql.Date;
+import java.text.DateFormat;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Enumeration;
@@ -68,6 +72,7 @@ import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.Map.Entry;
 
 import javax.swing.event.DocumentListener;
 import javax.swing.event.DocumentEvent;
@@ -76,11 +81,13 @@ import javax.swing.event.HyperlinkListener;
 import javax.swing.text.Document;
 import javax.swing.tree.DefaultMutableTreeNode;
 import javax.swing.tree.TreePath;
+import javax.swing.DefaultListModel;
 import javax.swing.JButton;
 import javax.swing.JEditorPane;
 import javax.swing.JFileChooser;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
+import javax.swing.JList;
 import javax.swing.JMenu;
 import javax.swing.JMenuBar;
 import javax.swing.JMenuItem;
@@ -96,6 +103,10 @@ import javax.swing.ScrollPaneConstants;
 import javax.swing.SwingWorker;
 import javax.swing.UIManager;
 import javax.swing.WindowConstants;
+
+import jdk.nashorn.internal.parser.DateParser;
+import jdk.nashorn.internal.parser.JSONParser;
+import jdk.nashorn.internal.runtime.JSONFunctions;
 
 //import DeltaGene.input.Browser.HPOTree;
 
@@ -332,17 +343,109 @@ class input {
 		private File dir = new File(".\\HPO\\");
 		private int down = 0;
 		private final int FAIL = -1;
-		private final int INIT = 0;
-		private final int DOWNLOAD_HPO = 1;
-		private final int DOWNLOAD_ASSOC = 2;
-		private final int READY = 3;
+		private final int FILE = 0;
+		private final int INIT = 1;
+		private final int DOWNLOAD_HPO = 2;
+		private final int DOWNLOAD_ASSOC = 3;
+		private final int READY = 4;
 		private int state;
+		private int build;
+		
 		
 		
 		HPOFile() {
+			state = FILE;
+			JFrame HPOFileWindow = new JFrame("Select HPO Build");
+			JPanel HPOFileWindowContentPane = new JPanel(new GridBagLayout());
+			DefaultListModel<String> model = new DefaultListModel<String>();
+			JList<String> HPOFileSelection = new JList<String>(model);
+			JScrollPane HPOFileSelectionSP = new JScrollPane(HPOFileSelection,
+					JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED,
+					JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED);
+			GridBagConstraints c = new GridBagConstraints();
+			JButton SelectButton = new JButton("Select");
+			JButton ExitButton = new JButton("Exit");
+			
+			
+			HPOFileWindow.setContentPane(HPOFileWindowContentPane);
+			HPOFileWindow.setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
+			HPOFileWindow.setPreferredSize(new Dimension(200,400));
+			
+			c.weightx = 1;
+			c.weighty = 0.95;
+			c.gridx = 0;
+			c.gridy = 0;
+			c.gridwidth = 2;
+			c.fill = GridBagConstraints.BOTH;
+			
+			HPOFileWindowContentPane.add(HPOFileSelectionSP,c);
+			
+			c.weightx = 0.5;
+			c.weighty = 0.05;
+			c.gridx = 0;
+			c.gridy = 1;
+			c.gridwidth = 1;
+			
+			HPOFileWindowContentPane.add(SelectButton,c);
+			c.gridx = 1;
+			c.gridy = 1;
+			c.gridwidth = 1;
+			HPOFileWindowContentPane.add(ExitButton,c);
+			
+			HPOFileWindow.pack();
+			HPOFileWindow.setLocationRelativeTo(null);
+			HPOFileWindow.setVisible(true);
+			
+			TreeMap<Integer, Long> buildMap = getBuilds();
+			
+			for (Entry<Integer, Long> build : buildMap.entrySet()) {
+				model.addElement(build.getKey()+""+build.getValue());
+			}
+			
 			state = INIT;
 		}
 		
+		/**
+		 *  retrieves a list of HPO builds
+		 * @return string array of HPO builds
+		 */
+		private TreeMap<Integer,String> getBuilds() {
+			TreeMap<Integer,Long> out = new TreeMap<Integer,Long>();
+			URL apiURL = null;
+			BufferedInputStream in;
+			String json;
+			
+			
+			try {
+				apiURL = new URL("http://compbio.charite.de/hudson/job/hpo/api/json?tree=builds[number,timestamp,result]");
+			}catch (MalformedURLException e){
+				e.printStackTrace();
+				System.out.println("Malformed URL in input.HPOFile.getBuilds()");
+			}
+			
+			try {
+				in = new BufferedInputStream(apiURL.openConnection().getInputStream());
+				json = convertStreamToString(in);
+				in.close();
+				String[] builds = json.split("[\\{\\}]");
+				int buildnum;
+				String time;
+				for (String build : builds) {
+					if (build.contains("SUCCESS")) {
+						buildnum = Integer.parseInt(build.substring(build.indexOf("number")+8,build.indexOf(',')));
+						time = build.substring(build.indexOf("timestamp")+8);
+						
+						//out.put(buildnum, time);
+					}
+				}
+			} catch (IOException e) {
+				e.printStackTrace();
+				System.out.println("Error downloading json in input.HPOFile.getBuilds()");
+			}
+			
+			return out;
+		}
+
 		public void LoadFiles() {
 			try {
 				File[] oldfiles;
@@ -602,6 +705,28 @@ class input {
 			
 			Browser (HPOObject hpodata) {
 				bwindow = new JFrame("HPO Browser");
+				GridBagConstraints c = new GridBagConstraints();
+				
+				bwindow.setLayout(new GridBagLayout());
+				c.anchor = GridBagConstraints.CENTER;
+				
+				bwindow.add(new JLabel("Please wait until the HPO database"
+						+ "has finished loading."),c);
+
+				try{
+					while (!hpodata.isReady()) {
+							Thread.sleep(100);
+					}
+				}catch (InterruptedException e) {
+					e.printStackTrace();
+					new Error("Fatal error",
+							"An unknown error has occured. "
+							+ "Please try running the program again.",
+							WindowConstants.EXIT_ON_CLOSE);
+				}
+				
+				bwindow.removeAll();
+				
 				controls = new JPanel();
 				content = new JPanel();
 				jsp = new JScrollPane();
@@ -612,11 +737,9 @@ class input {
 				addbutton = new JButton("Add to input");
 				tree = new HPOTree(root);
 				
-				GridBagConstraints c = new GridBagConstraints();
 				
 				bwindow.setPreferredSize(new Dimension(700,600));
 				bwindow.setDefaultCloseOperation(WindowConstants.DISPOSE_ON_CLOSE);
-				bwindow.setLayout(new GridBagLayout());
 				
 				search.addKeyListener(this);
 				controls.setLayout(new FlowLayout());
@@ -758,7 +881,6 @@ class input {
 			public void mouseReleased(MouseEvent e) {
 			}
 			public void show(String hpo) {
-				addbutton.setEnabled(false);
 				show(hpo, null);
 			}
 		
@@ -766,6 +888,8 @@ class input {
 				if (input != null) {
 					addbutton.setEnabled(true);
 					addbutton.setActionCommand("add:"+input.getID());
+				}else{
+					addbutton.setEnabled(false);
 				}
 				tree.clearSelection();
 				tree.collapseAll();
@@ -773,12 +897,11 @@ class input {
 					tree.makeVisible(path);
 					tree.addSelectionPath(path);
 				}
-				bwindow.pack();
-				bwindow.setLocationRelativeTo(null);
-				bwindow.setVisible(true);
 				bwindow.revalidate();
 				bwindow.repaint();
 				bwindow.pack();
+				bwindow.setLocationRelativeTo(null);
+				bwindow.setVisible(true);
 			}
 		}
 
@@ -988,6 +1111,19 @@ class input {
 		
 		HPOObject(HPOFile hpofile) {
 			state = INIT;
+			final HPOObject tempHPOObject = this;
+			try {
+				Runnable browserWorker = new Runnable() {
+					@Override
+					public void run() {
+						browser = new Browser(tempHPOObject);
+					}
+				};
+				DeltaGene.pool.submit(browserWorker);
+			}catch (Exception e) {
+				e.printStackTrace();
+				
+			}
 			files = hpofile;
 		}
 		
@@ -1001,7 +1137,6 @@ class input {
 				populateHPOObject(files.getHPOFile());
 				state = LOAD_ASSOC;
 				populateHPOGenes(files.getAssocFile());
-				browser = new Browser(this);
 				state = READY;
 				inputinstance.notify();
 			}catch (InterruptedException e) {

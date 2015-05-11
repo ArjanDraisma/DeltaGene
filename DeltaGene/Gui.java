@@ -164,6 +164,7 @@ public class Gui extends Thread implements ActionListener, ItemListener {
 				}
 			};
 			resworker.execute();
+			//DeltaGene.pool.submit(resworker);
 		}if (e.getActionCommand().equals("clear")) {
 			dgi.clearInputs();
 		}if (e.getActionCommand().equals("add")) {
@@ -276,7 +277,7 @@ public class Gui extends Thread implements ActionListener, ItemListener {
 	
 	private void showInputs() {
 		try {
-			// Before initializing
+			// Before initializing HPO data
 			// Create an instance of the input class
 			dgi = new input();
 			contentlayout = new SpringLayout();	// create the layout manager for the content container
@@ -286,7 +287,7 @@ public class Gui extends Thread implements ActionListener, ItemListener {
 			inputcontainer = new Container();
 			inputslayout = new BoxLayout(inputcontainer, BoxLayout.PAGE_AXIS);
 			
-			// initialize 
+			// initialize HPO data
 			DeltaGene.pool.submit(new Runnable() {
 				@Override
 				public void run() {
@@ -294,7 +295,7 @@ public class Gui extends Thread implements ActionListener, ItemListener {
 				}
 			});
 			
-			// do while initializing
+			// do while initializing HPO data
 			inputcontainer.setLayout(inputslayout);
 			JScrollPane inputssp = new JScrollPane(inputcontainer);
 			Button submitButton = new Button("Compare");
