@@ -65,8 +65,6 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.TreeMap;
 import java.util.concurrent.Callable;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 
 import javax.swing.event.DocumentListener;
@@ -97,26 +95,31 @@ import javax.swing.SwingWorker;
 import javax.swing.UIManager;
 import javax.swing.WindowConstants;
 
+import com.sun.org.apache.xerces.internal.impl.xs.SubstitutionGroupHandler;
+
 //import DeltaGene.input.Browser.HPOTree;
 
 /**
+ * This class handles input from the user, generating headers and generating 
+ * results.
  * @author ArjanDraisma
- * This class handles input from the user, generating headers and generating results.
+ * 
  */
-class input {
+class Input {
 	class Autocomplete implements DocumentListener, ActionListener {
 		/**
 		 * @author ArjanDraisma
 		 * acWindow implements a custom version of show, tailored to the
 		 * amount of autocomplete items that have been found.
 		 */
-		class acWindow extends JPopupMenu {
+		class AutocompleteWindow extends JPopupMenu {
 			private static final long serialVersionUID = 1L;
 			public void show(int num) {
-				setPreferredSize(new Dimension(invoker.getSize().width,
+				setPreferredSize(new Dimension(acInvoker.getSize().width,
 						num*22));
-				setLocation(invoker.getInputBoxLocationOnScreen().x,
-						invoker.getInputBoxLocationOnScreen().y+invoker.getSize().height);
+				setLocation(acInvoker.getInputBoxLocationOnScreen().x,
+						acInvoker.getInputBoxLocationOnScreen().y
+						+ acInvoker.getSize().height);
 				pack();
 				revalidate();
 				repaint();
@@ -129,9 +132,10 @@ class input {
 		class keyHandler implements KeyListener, FocusListener {
 			@Override
 			public void focusGained(FocusEvent e) {
-				if (invoker == null||!e.getComponent().equals(invoker.getInputBox())) {
-					invoker = getInputboxObject((JTextArea)e.getSource());
-					dropdown.setInvoker(invoker.getInputBox());
+				if (acInvoker == null||!e.getComponent().equals(
+						acInvoker.getInputBox())) {
+					acInvoker = getInputboxObject((JTextArea)e.getSource());
+					acDropdownBox.setInvoker(acInvoker.getInputBox());
 				}
 			}
 			
@@ -141,13 +145,21 @@ class input {
 			
 
 			private void highlightselection (int index) {
-				for (int i = 0; i < dropdown.getComponentCount(); i++) {
+				for (int i = 0; i < acDropdownBox.getComponentCount(); i++) {
 					if (i == index) {
-						dropdown.getComponent(i).setBackground(UIManager.getColor("MenuItem.selectionBackground"));
-						dropdown.getComponent(i).setForeground(UIManager.getColor("MenuItem.selectionForeground"));
+						acDropdownBox.getComponent(i).setBackground(
+								UIManager.getColor(
+										"MenuItem.selectionBackground"));
+						acDropdownBox.getComponent(i).setForeground(
+								UIManager.getColor(
+										"MenuItem.selectionForeground"));
 					}else{
-						dropdown.getComponent(i).setBackground(UIManager.getColor("MenuItem.background"));
-						dropdown.getComponent(i).setForeground(UIManager.getColor("MenuItem.foreground"));
+						acDropdownBox.getComponent(i).setBackground(
+								UIManager.getColor(
+										"MenuItem.background"));
+						acDropdownBox.getComponent(i).setForeground(
+								UIManager.getColor(
+										"MenuItem.foreground"));
 					}
 				}
 			}
@@ -155,7 +167,7 @@ class input {
 			@Override
 			public void keyPressed(KeyEvent e) {
 				int key = e.getKeyCode();
-				if ((key == KeyEvent.VK_DOWN||key == KeyEvent.VK_UP||key == KeyEvent.VK_ENTER)&&dropdown.isVisible()) {
+				if ((key == KeyEvent.VK_DOWN||key == KeyEvent.VK_UP||key == KeyEvent.VK_ENTER)&&acDropdownBox.isVisible()) {
 					e.consume();
 				}
 			}
@@ -163,31 +175,31 @@ class input {
 			@Override
 			public void keyReleased(KeyEvent e) {
 				int key = e.getKeyCode();
-				int index = dropdown.getSelectionModel().getSelectedIndex();
-				if (key == KeyEvent.VK_DOWN&&dropdown.isVisible()) {
-					if (index+1>dropdown.getComponentCount()-1) {
-						dropdown.getSelectionModel().setSelectedIndex(0);
+				int index = acDropdownBox.getSelectionModel().getSelectedIndex();
+				if (key == KeyEvent.VK_DOWN&&acDropdownBox.isVisible()) {
+					if (index+1>acDropdownBox.getComponentCount()-1) {
+						acDropdownBox.getSelectionModel().setSelectedIndex(0);
 					}else{
-						dropdown.getSelectionModel().setSelectedIndex(index+1);
+						acDropdownBox.getSelectionModel().setSelectedIndex(index+1);
 					}
 				}
-				if (key == KeyEvent.VK_UP&&dropdown.isVisible()) {
+				if (key == KeyEvent.VK_UP&&acDropdownBox.isVisible()) {
 					if (index-1<0) {
-						dropdown.getSelectionModel().setSelectedIndex(dropdown.getComponentCount()-1);
+						acDropdownBox.getSelectionModel().setSelectedIndex(acDropdownBox.getComponentCount()-1);
 					}else{
-						dropdown.getSelectionModel().setSelectedIndex(index-1);
+						acDropdownBox.getSelectionModel().setSelectedIndex(index-1);
 					}
 				}
-				highlightselection(dropdown.getSelectionModel().getSelectedIndex());
-				if (key == KeyEvent.VK_ENTER&&dropdown.isVisible()) {
+				highlightselection(acDropdownBox.getSelectionModel().getSelectedIndex());
+				if (key == KeyEvent.VK_ENTER&&acDropdownBox.isVisible()) {
 					if (index > -1) {
-						ActionEvent ae = new ActionEvent(dropdown.getComponent(index), ActionEvent.ACTION_PERFORMED, ((JMenuItem)dropdown.getComponent(index)).getActionCommand());
+						ActionEvent ae = new ActionEvent(acDropdownBox.getComponent(index), ActionEvent.ACTION_PERFORMED, ((JMenuItem)acDropdownBox.getComponent(index)).getActionCommand());
 						actionPerformed(ae);
-						dropdown.setVisible(false);
+						acDropdownBox.setVisible(false);
 					}
 				}
-				if (key == KeyEvent.VK_ESCAPE&&dropdown.isVisible()) {
-					dropdown.setVisible(false);
+				if (key == KeyEvent.VK_ESCAPE&&acDropdownBox.isVisible()) {
+					acDropdownBox.setVisible(false);
 				}
 			}
 
@@ -196,31 +208,31 @@ class input {
 			}
 		}
 		
-		acWindow dropdown;
-		keyHandler kh;
+		AutocompleteWindow acDropdownBox;
+		keyHandler keyHandlerInstance;
 		
-		userinput invoker;
+		userinput acInvoker;
 		Future<TreeMap<String, String>> futureACList;
 		TreeMap<String,String> ACList;
 		
-		Autocomplete (Future<TreeMap<String,String>> faclist) {
-			futureACList = faclist;
-			kh = new keyHandler();
-			dropdown = new acWindow();
-			dropdown.addFocusListener(kh);
-			dropdown.setVisible(false);
+		Autocomplete (Future<TreeMap<String,String>> futureAcKeywordList) {
+			futureACList = futureAcKeywordList;
+			keyHandlerInstance = new keyHandler();
+			acDropdownBox = new AutocompleteWindow();
+			acDropdownBox.addFocusListener(keyHandlerInstance);
+			acDropdownBox.setVisible(false);
 		}
 		
 		@Override
 		public void actionPerformed(ActionEvent e) {
 			String hpo = e.getActionCommand();
-			((JTextArea)dropdown.getInvoker()).setText(hpo);
+			((JTextArea)acDropdownBox.getInvoker()).setText(hpo);
 		}
 		
 		public void add (userinput input) {
 			input.getDocument().addDocumentListener(this);
-			input.getInputBox().addFocusListener(kh);
-			input.getInputBox().addKeyListener(kh);
+			input.getInputBox().addFocusListener(keyHandlerInstance);
+			input.getInputBox().addKeyListener(keyHandlerInstance);
 		}
 		
 		// changedupdate is not used on plainDocuments, as used by
@@ -230,20 +242,20 @@ class input {
 		
 		@Override
 		public void insertUpdate (DocumentEvent e) {
-			int len;
+			int length;
 			String s;
 			String hpo;
-			Document doc;
-			JMenuItem jmitem;
+			Document invokerDocument;
+			JMenuItem acListItem;
 			int num = 0;
-			long timeout = System.currentTimeMillis()+5000;
+			long timeOut = System.currentTimeMillis()+5000;
 			
-			doc = invoker.getDocument();
-			invoker.getInputBox().setComponentPopupMenu(dropdown);
-			dropdown.removeAll();
-			dropdown.setInvoker(invoker.getInputBox());
-			len = doc.getLength();
-			if (len > 2) {
+			invokerDocument = acInvoker.getDocument();
+			acInvoker.getInputBox().setComponentPopupMenu(acDropdownBox);
+			acDropdownBox.removeAll();
+			acDropdownBox.setInvoker(acInvoker.getInputBox());
+			length = invokerDocument.getLength();
+			if (length > 2) {
 				/* Checks if ACList is not null, the DocumentEvent is not
 				 * null, or whether the future ACList is done.
 				 * If the ACList is not null, the data is already available
@@ -267,8 +279,8 @@ class input {
 						 * the future object is done.
 						 */
 						while (!futureACList.isDone()) {
-							if (timeout < System.currentTimeMillis()) {
-								dropdown.setVisible(false);
+							if (timeOut < System.currentTimeMillis()) {
+								acDropdownBox.setVisible(false);
 								return;
 							}
 						}
@@ -283,32 +295,32 @@ class input {
 							exception.printStackTrace();
 						}
 					}
-					s = invoker.getInputText();
-					if (invoker.getInputType() == 0) {
+					s = acInvoker.getInputText();
+					if (acInvoker.getInputType() == 0) {
 						for (String search : ACList.keySet()) {
 							if (search.toLowerCase().contains(s.toLowerCase())&&num<10) {
 								hpo = ACList.get(search);
-								jmitem = new JMenuItem(search+" ("+hpo+")");
-								jmitem.setComponentPopupMenu(dropdown);
-								jmitem.addActionListener(this);
-								jmitem.addKeyListener(kh);
-								jmitem.setActionCommand(hpo);
-								jmitem.setEnabled(true);
-								jmitem.setOpaque(true);
-								dropdown.add(jmitem);
+								acListItem = new JMenuItem(search+" ("+hpo+")");
+								acListItem.setComponentPopupMenu(acDropdownBox);
+								acListItem.addActionListener(this);
+								acListItem.addKeyListener(keyHandlerInstance);
+								acListItem.setActionCommand(hpo);
+								acListItem.setEnabled(true);
+								acListItem.setOpaque(true);
+								acDropdownBox.add(acListItem);
 								num++;
 							}
 						}
-						dropdown.show(num);
-						invoker.getInputBox().requestFocusInWindow();
+						acDropdownBox.show(num);
+						acInvoker.getInputBox().requestFocusInWindow();
 					}
 				}else{
-					dropdown.add(new JMenuItem("Please wait..."));
-					dropdown.show(3);
-					invoker.getInputBox().requestFocusInWindow();
+					acDropdownBox.add(new JMenuItem("Please wait..."));
+					acDropdownBox.show(3);
+					acInvoker.getInputBox().requestFocusInWindow();
 				}
 			}else{
-				dropdown.setVisible(false);
+				acDropdownBox.setVisible(false);
 			}
 		}
 
@@ -322,25 +334,25 @@ class input {
 		}
 
 		public boolean isVisible() {
-			return dropdown.isVisible();
+			return acDropdownBox.isVisible();
 		}
 	}
 	
 	class HPOFile {
-		private File hpofile;
-		private File assocfile;
-		private File dir = new File(".\\HPO\\");
-		private int down = 0;
-		private final int FAIL = -1;
-		private final int INIT = 0;
-		private final int DOWNLOAD_HPO = 1;
-		private final int DOWNLOAD_ASSOC = 2;
-		private final int READY = 3;
+		private File hpoFile;
+		private File associationFile;
+		private File directory = new File(".\\HPO\\");
+		private int downloaded = 0;
+		public final int STATE_FAIL = -1;
+		public final int STATE_INIT = 0;
+		public final int STATE_DOWNLOAD_HPO = 1;
+		public final int STATE_DOWNLOAD_ASSOC = 2;
+		public final int STATE_READY = 3;
 		private int state;
 		
 		
 		HPOFile() {
-			state = INIT;
+			state = STATE_INIT;
 		}
 		
 		public void LoadFiles() {
@@ -371,9 +383,9 @@ class input {
 				timestamp = json.substring(tsindex,  json.indexOf(",\"url"));
 				
 				// check if HPO folder exists
-				if (!dir.exists()) {
+				if (!directory.exists()) {
 					// If not, Try to create the HPO directory in the applets' folder
-					if (!dir.mkdir()) {
+					if (!directory.mkdir()) {
 						// show error to user in case something goes wrong. Should not happen.
 						new Error("Could not make HPO files directory.\n"
 								+ "Try launching the application as administrator.", 
@@ -382,16 +394,16 @@ class input {
 						return;
 					}
 				}
-				hpofile = new File(".\\HPO\\override.obo");
+				hpoFile = new File(".\\HPO\\override.obo");
 				
 				// check if override HPO file exists
-				if (!hpofile.exists()) {
-					hpofile = new File(".\\HPO\\"+timestamp+".obo");
+				if (!hpoFile.exists()) {
+					hpoFile = new File(".\\HPO\\"+timestamp+".obo");
 					// check if HPO file with this timestamp already exists
-					if (!hpofile.exists()) {
-						state = DOWNLOAD_HPO;
+					if (!hpoFile.exists()) {
+						state = STATE_DOWNLOAD_HPO;
 						// oldhpo will contain the filenames for all files in the HPO directory 
-						oldfiles = dir.listFiles();
+						oldfiles = directory.listFiles();
 						
 						for (File file : oldfiles) {
 							if (file.getName().endsWith(".obo")) 
@@ -400,7 +412,7 @@ class input {
 						}
 						
 						// Create the file if it does not exist
-						hpofile.createNewFile();
+						hpoFile.createNewFile();
 						
 						/* 
 						 * From here, the method will download the HPO number database from
@@ -408,12 +420,12 @@ class input {
 						 */
 						fileurl = new URL("http://compbio.charite.de/hudson/job/"
 								+ "hpo/lastStableBuild/artifact/hp/hp.obo");
-						out = new FileWriter(hpofile);
+						out = new FileWriter(hpoFile);
 						istream =	fileurl.openConnection().getInputStream(); 
 						in = new BufferedReader(new InputStreamReader(istream));
 						while ((buffer = in.readLine()) != null) { 
 							out.write(buffer+"\n");
-							down += buffer.length();
+							downloaded += buffer.length();
 						}
 						out.close();
 					}
@@ -430,23 +442,23 @@ class input {
 				tsindex = json.indexOf("timestamp\":")+"timestamp\":".length();
 				timestamp = json.substring(tsindex, json.indexOf(",\"url"));
 				
-				assocfile = new File(".\\HPO\\override.assoc");
+				associationFile = new File(".\\HPO\\override.assoc");
 				
 				// check if override association file exists
-				if (!assocfile.exists()) {
+				if (!associationFile.exists()) {
 					// check if association file with this timestamp already exists
-					assocfile = new File(".\\HPO\\"+timestamp+".assoc");
-					if (!assocfile.exists()) {
-						state = DOWNLOAD_ASSOC;
+					associationFile = new File(".\\HPO\\"+timestamp+".assoc");
+					if (!associationFile.exists()) {
+						state = STATE_DOWNLOAD_ASSOC;
 						/* 
 						 * dggui.down contains the number of bytes that have been downloaded
 						 * and will be displayed on the applet when it is downloading the files,
 						 * to indicate some progress is being made.
 						 */
-						down = 0;
+						downloaded = 0;
 						
 						// oldfiles will contain the filenames for all files in the HPO directory 
-						oldfiles = dir.listFiles();
+						oldfiles = directory.listFiles();
 						
 						for (File file : oldfiles) {
 							if (file.getName().endsWith(".assoc")) 
@@ -456,18 +468,18 @@ class input {
 						
 						// Create the file if it does not exist
 		
-						assocfile.createNewFile();
+						associationFile.createNewFile();
 						fileurl = new URL("http://compbio.charite.de/hudson/job/"
 								+ "hpo.annotations.monthly/lastStableBuild/artifact/"
 								+ "annotation/ALL_SOURCES_ALL_FREQUENCIES_"
 								+ "diseases_to_genes_to_phenotypes.txt");
-						out = new FileWriter(assocfile);
+						out = new FileWriter(associationFile);
 						istream = fileurl.openConnection().getInputStream(); 
 						in = new BufferedReader(
 								new InputStreamReader(istream));
 						while ((buffer = in.readLine()) != null) { 
 							out.write(buffer+"\n");
-							down += buffer.length();
+							downloaded += buffer.length();
 						}
 						out.close();
 					}
@@ -475,12 +487,13 @@ class input {
 					time = stop - start;
 					System.out.println("(Down)loading association files took "+time+"millis");
 				}
-				state = READY;
+				state = STATE_READY;
 				return;
 			}catch (IOException e){
-				state = FAIL;
+				state = STATE_FAIL;
 				e.printStackTrace();
-				new Error("Unspecified file error. Please try restarting the program as administrator.", "Error", WindowConstants.EXIT_ON_CLOSE);
+				new Error(Error.UNDEF_ERROR, Error.UNDEF_ERROR_T,
+						WindowConstants.EXIT_ON_CLOSE);
 			}
 		}
 		
@@ -506,15 +519,15 @@ class input {
 		}
 		
 		public File getAssocFile() {
-			return assocfile;
+			return associationFile;
 		}
 		
 		public int getDown() {
-			return down;
+			return downloaded;
 		}
 		
 		public File getHPOFile() {
-			return hpofile;
+			return hpoFile;
 		}
 		
 		/**
@@ -534,7 +547,7 @@ class input {
 		}
 		
 		public boolean isReady () {
-			return state == READY;
+			return state == STATE_READY;
 		}
 	}
 	
@@ -585,86 +598,111 @@ class input {
 				}
 			}
 			
-			private DefaultMutableTreeNode root = 
+			private DefaultMutableTreeNode rootNode = 
 					new DefaultMutableTreeNode("Human Phenotype Ontology");
-			private JFrame bwindow;
-			private JPanel content;
-			private HPOTree tree;
-			private JPopupMenu treemenu;
-			private JScrollPane jsp;
-			private JPanel controls;
+			private JFrame browserWindow;
+			private JPanel browserContentPanel;
+			private HPOTree hpoBrowserTree;
+			private JPopupMenu browserMenu;
+			final private JScrollPane treeScrollPane;
+			private JPanel browserControlPanel;
 			private JLabel searchlabel;
-			private JTextField search;
-			private JButton searchbutton;
-			private JButton listbutton;
-			private JMenuItem treelistbtn;
-			private JButton addbutton;
+			private JTextField searchField;
+			private JButton searchButton;
+			private JButton listButton;
+			private JMenuItem treeListButton;
+			private JButton addButton;
+			private int state;
+			public final static int STATE_INIT = 0;
+			public final static int STATE_READY = 1;
 			
-			Browser (HPOObject hpodata) {
-				bwindow = new JFrame("HPO Browser");
-				controls = new JPanel();
-				content = new JPanel();
-				jsp = new JScrollPane();
+			Browser (final HPOObject hpodata) {
+				
+				state = STATE_INIT;
+				browserWindow = new JFrame("HPO Browser");
+				browserControlPanel = new JPanel();
+				browserContentPanel = new JPanel();
+				treeScrollPane = new JScrollPane();
 				searchlabel = new JLabel("Search:");
-				search = new JTextField();
-				searchbutton = new JButton("Find");
-				listbutton = new JButton("List genes");
-				addbutton = new JButton("Add to input");
-				tree = new HPOTree(root);
+				searchField = new JTextField();
+				searchButton = new JButton("Find");
+				listButton = new JButton("List genes");
+				addButton = new JButton("Add to input");
+				final JLabel waitlabel = new JLabel("Please wait until the HPO database"
+						+ "has finished loading...");
+				hpoBrowserTree = new HPOTree(rootNode);
+				final GridBagConstraints c = new GridBagConstraints();
 				
-				GridBagConstraints c = new GridBagConstraints();
+				browserWindow.setPreferredSize(new Dimension(700,600));
+				browserWindow.setDefaultCloseOperation(WindowConstants.DISPOSE_ON_CLOSE);
+				browserWindow.setLayout(new GridBagLayout());
 				
-				bwindow.setPreferredSize(new Dimension(700,600));
-				bwindow.setDefaultCloseOperation(WindowConstants.DISPOSE_ON_CLOSE);
-				bwindow.setLayout(new GridBagLayout());
+				searchField.addKeyListener(this);
+				browserControlPanel.setLayout(new FlowLayout());
+				browserControlPanel.add(searchlabel);
+				searchField.setPreferredSize(new Dimension(80, 20));
+				browserControlPanel.add(searchField);
+				searchButton.addActionListener(this);
+				searchButton.addKeyListener(this);
+				searchButton.setActionCommand("search");
+				browserControlPanel.add(searchButton);
+				listButton.addActionListener(this);
+				listButton.setActionCommand("list");
+				browserControlPanel.add(listButton);
+				addButton.setEnabled(false);
+				browserControlPanel.add(addButton);
+				browserControlPanel.setMaximumSize(new Dimension(browserWindow.getWidth(), 30));
 				
-				search.addKeyListener(this);
-				controls.setLayout(new FlowLayout());
-				controls.add(searchlabel);
-				search.setPreferredSize(new Dimension(80, 20));
-				controls.add(search);
-				searchbutton.addActionListener(this);
-				searchbutton.addKeyListener(this);
-				searchbutton.setActionCommand("search");
-				controls.add(searchbutton);
-				listbutton.addActionListener(this);
-				listbutton.setActionCommand("list");
-				controls.add(listbutton);
-				addbutton.setEnabled(false);
-				controls.add(addbutton);
-				controls.setMaximumSize(new Dimension(bwindow.getWidth(), 30));
-				
-				content.setLayout(new GridBagLayout());
+				browserContentPanel.setLayout(new GridBagLayout());
 				c.fill = GridBagConstraints.BOTH;
 				c.weightx = 1; c.weighty = 1;
-				content.add(jsp, c);
-				content.setMaximumSize(null);
+				browserContentPanel.setMaximumSize(null);
 				
 				c.fill = GridBagConstraints.BOTH;
 				c.gridy = 0; c.gridx = 0; c.weightx = 1; c.weighty = 0.05;
-				bwindow.add(controls, c);
+				browserWindow.add(browserControlPanel, c);
 				c.gridy = 1; c.gridx = 0; c.weightx = 1; c.weighty = 0.95;
-				bwindow.add(content, c);
+				browserWindow.add(browserContentPanel, c);
 				
-				tree.addMouseListener(this);
-				tree.setExpandsSelectedPaths(true);
-				root.add(hpodata.getHPOHeirarchy("HP:0000001"));
-				jsp.setViewportView(tree);
+				treeScrollPane.add(waitlabel);
+				browserContentPanel.add(treeScrollPane, c);
+				
+				hpoBrowserTree.addMouseListener(this);
+				hpoBrowserTree.setExpandsSelectedPaths(true);
+			
+				DeltaGene.THREADPOOL.submit(new Runnable() {
+					@Override
+					public void run() {
+						while (!hpodata.isReady()) {
+							try {
+								Thread.sleep(50);
+							} catch (InterruptedException e) {
+								new Error(Error.CRIT_ERROR, Error.CRIT_ERROR_T,
+								WindowConstants.EXIT_ON_CLOSE, e);
+								e.printStackTrace();
+							}
+						}
+						treeScrollPane.remove(waitlabel);
+						//rootNode.add(hpodata.getHPOHeirarchy("HP:0000001"));
+						treeScrollPane.setViewportView(hpoBrowserTree);
+						state = STATE_READY;
+					}
+				});
 			}
 			@Override
 			public void actionPerformed(ActionEvent e) {
-				if (e.getActionCommand().equals("search")&&search.getText().length()>0) {
-					tree.clearSelection();
-					tree.collapseAll();
-					ArrayList<TreePath> AL = find(root, search.getText());
+				if (e.getActionCommand().equals("search")&&searchField.getText().length()>0) {
+					hpoBrowserTree.clearSelection();
+					hpoBrowserTree.collapseAll();
+					ArrayList<TreePath> AL = find(rootNode, searchField.getText());
 					for (TreePath path : AL) {
-						tree.makeVisible(path);
+						hpoBrowserTree.makeVisible(path);
 					}
-					tree.setSelectionPaths(AL.toArray(new TreePath[AL.size()]));
+					hpoBrowserTree.setSelectionPaths(AL.toArray(new TreePath[AL.size()]));
 					//TreePath[] paths = new TreePath[AL.size()];
 					//paths = AL.toArray(paths);
 				}if (e.getActionCommand().equals("list")) {
-					TreePath[] paths = tree.getSelectionPaths();
+					TreePath[] paths = hpoBrowserTree.getSelectionPaths();
 					StringBuilder sb = new StringBuilder();
 					String node;
 					for (TreePath path : paths) {
@@ -683,18 +721,18 @@ class input {
 			}
 			
 			private void contextMenu(Point p) {
-				treemenu = new JPopupMenu();
-				treemenu.setPreferredSize(new Dimension(150,30));
-				treelistbtn = new JMenuItem("List selected");
-				treelistbtn.addActionListener(this);
-				treelistbtn.setActionCommand("list");
-				treemenu.add(treelistbtn);
-				treemenu.setLocation(p);
-				treemenu.setInvoker(bwindow);
-				treemenu.pack();
-				treemenu.revalidate();
-				treemenu.repaint();
-				treemenu.setVisible(true);
+				browserMenu = new JPopupMenu();
+				browserMenu.setPreferredSize(new Dimension(150,30));
+				treeListButton = new JMenuItem("List selected");
+				treeListButton.addActionListener(this);
+				treeListButton.setActionCommand("list");
+				browserMenu.add(treeListButton);
+				browserMenu.setLocation(p);
+				browserMenu.setInvoker(browserWindow);
+				browserMenu.pack();
+				browserMenu.revalidate();
+				browserMenu.repaint();
+				browserMenu.setVisible(true);
 			}
 			
 			private ArrayList<TreePath> find(DefaultMutableTreeNode parent, String hpo) {
@@ -721,9 +759,9 @@ class input {
 			 */
 			@Override
 			public void keyReleased(KeyEvent e) {
-				if (e.getComponent().equals(search)) {
+				if (e.getComponent().equals(searchField)) {
 					if (e.getKeyCode() == KeyEvent.VK_ENTER) {
-						actionPerformed(new ActionEvent(search, ActionEvent.ACTION_PERFORMED, "search"));
+						actionPerformed(new ActionEvent(searchField, ActionEvent.ACTION_PERFORMED, "search"));
 					}
 				}
 			}
@@ -745,7 +783,7 @@ class input {
 			@Override
 			public void mouseEntered(MouseEvent e) {
 			}
-		
+			
 			@Override
 			public void mouseExited(MouseEvent e) {
 			}
@@ -753,32 +791,54 @@ class input {
 			@Override
 			public void mousePressed(MouseEvent e) {
 			}
-		
+			
 			@Override
 			public void mouseReleased(MouseEvent e) {
 			}
-			public void show(String hpo) {
-				addbutton.setEnabled(false);
-				show(hpo, null);
+			public void show(String hpo, HPOObject hpoData) {
+				addButton.setEnabled(false);
+				show(hpo, hpoData, null);
 			}
 		
-			public void show(String hpo, userinput input) {
-				if (input != null) {
-					addbutton.setEnabled(true);
-					addbutton.setActionCommand("add:"+input.getID());
-				}
-				tree.clearSelection();
-				tree.collapseAll();
-				for (TreePath path : find(root, hpo)) {
-					tree.makeVisible(path);
-					tree.addSelectionPath(path);
-				}
-				bwindow.pack();
-				bwindow.setLocationRelativeTo(null);
-				bwindow.setVisible(true);
-				bwindow.revalidate();
-				bwindow.repaint();
-				bwindow.pack();
+			public void show(final String hpo, final HPOObject hpoData, final userinput input) {
+				browserWindow.pack();
+				browserWindow.setLocationRelativeTo(null);
+				browserWindow.setVisible(true);
+				browserWindow.revalidate();
+				browserWindow.repaint();
+				browserWindow.pack();
+				DeltaGene.THREADPOOL.submit(new Runnable() {
+					@Override
+					public void run() {
+						while (!isReady()) {
+							try {
+								Thread.sleep(50);
+							} catch (InterruptedException e) {
+								// TODO Auto-generated catch block
+								e.printStackTrace();
+							}
+						}
+						if (input != null) {
+							addButton.setEnabled(true);
+							addButton.setActionCommand("add:"+input.getID());
+						}
+						rootNode.removeAllChildren();
+						//DefaultMutableTreeNode search = hpoData.getHPOHeirarchy(hpo);
+						DefaultMutableTreeNode search = hpoData.getReverseHPOHeirarchy(new DefaultMutableTreeNode(hpo));
+						rootNode.add(search);
+						hpoBrowserTree.expandAll();
+						//hpoBrowserTree.clearSelection();
+						//hpoBrowserTree.collapseAll();
+						/*for (TreePath path : find(rootNode, hpo)) {
+							hpoBrowserTree.makeVisible(path);
+							hpoBrowserTree.addSelectionPath(path);
+						}*/
+					}
+				});
+			}
+			
+			boolean isReady() {
+				return state == STATE_READY;
 			}
 		}
 
@@ -790,8 +850,9 @@ class input {
 			private String hpoid = "Undefined";
 			private String phenotype = "Undefined";
 			private String definition = "Undefined";
-			private HashSet<String> genes = new HashSet<String>();
+			private HashSet<String> geneSet = new HashSet<String>();
 			private ArrayList<HPONumber> children = new ArrayList<HPONumber>();
+			private ArrayList<HPONumber> parents = new ArrayList<HPONumber>();
 			
 			HPONumber (String hpo) {
 				set(hpo);
@@ -817,10 +878,10 @@ class input {
 			 * @return true if gene was added, false if gene already exists.
 			 */
 			public boolean addGene(String gene) {
-				if (genes.contains(gene)) {
+				if (geneSet.contains(gene)) {
 					return false;
 				}
-				genes.add(gene);
+				geneSet.add(gene);
 				return true;
 			}
 			
@@ -855,11 +916,25 @@ class input {
 			}
 			
 			/**
+			 * returns the amount of parents above this HPO number
+			 * @return the number of parents above this HPO number
+			 */
+			public int getParentCount() {
+				return parents.size();
+			}
+			
+			/**
 			 * Returns the amount of children under this HPO number.
 			 * @return The number of children under this HPO number.
 			 */
 			public int getChildCount() {
 				return children.size();
+			}
+			public void addParent(HPONumber parent) {
+				parents.add(parent);
+			}
+			public ArrayList<HPONumber> getParents() {
+				return parents;
 			}
 			public ArrayList<HPONumber> getChildren() {
 				return children;
@@ -873,7 +948,7 @@ class input {
 			 */
 			public void getGenes(ArrayList<String> inAL,
 					HashSet<String> set) {
-					for (String gene : genes) {
+					for (String gene : geneSet) {
 						if (!set.contains(gene)) {
 							set.add(gene);
 							inAL.add(gene);
@@ -920,7 +995,7 @@ class input {
 			 * @return True if gene list > 0, false if not.
 			 */
 			public boolean hasGenes() {
-				if (genes.size() > 0) {
+				if (geneSet.size() > 0) {
 					return true;
 				}
 				return false;
@@ -979,30 +1054,43 @@ class input {
 		private static HashMap<String, HPONumber> data = 
 				new HashMap<String, HPONumber>();
 		public Browser browser;
-		final static int INIT = 0;
-		final static int WAIT = 1;
-		final static int LOAD_HPO = 2;
-		final static int LOAD_ASSOC = 3;
-		final static int READY = 4;
+		final static int STATE_INIT = 0;
+		final static int STATE_WAIT = 1;
+		final static int STATE_LOAD_HPO = 2;
+		final static int STATE_LOAD_ASSOC = 3;
+		final static int STATE_READY = 4;
 		private static int state;
 		
 		HPOObject(HPOFile hpofile) {
-			state = INIT;
+			state = STATE_INIT;
 			files = hpofile;
 		}
 		
-		public void build(input inputinstance) {
+		// Finds the path of a given hpo number from bottom to top
+		public DefaultMutableTreeNode getReverseHPOHeirarchy(DefaultMutableTreeNode hponode) {
+			String hpo = hponode.getUserObject().toString().substring(0,10);
+			DefaultMutableTreeNode metaNode = new DefaultMutableTreeNode();
+			if (data.get(hpo).getParentCount() == 0) {
+				return hponode;
+			}
+			for (HPONumber parent : data.get(hpo).getParents()) {
+				metaNode.add(getReverseHPOHeirarchy(new DefaultMutableTreeNode(parent.hpo())));
+			}
+			return metaNode;
+		}
+
+		public void build(Input inputinstance) {
 			try {
-				if (files.state != HPOFILES.READY) {
-					state = WAIT;
+				if (files.state != HPOFILES.STATE_READY) {
+					state = STATE_WAIT;
 					wait();
 				}
-				state = LOAD_HPO;
+				state = STATE_LOAD_HPO;
 				populateHPOObject(files.getHPOFile());
-				state = LOAD_ASSOC;
-				populateHPOGenes(files.getAssocFile());
 				browser = new Browser(this);
-				state = READY;
+				state = STATE_LOAD_ASSOC;
+				populateHPOGenes(files.getAssocFile());
+				state = STATE_READY;
 				inputinstance.notify();
 			}catch (InterruptedException e) {
 				e.printStackTrace();
@@ -1182,42 +1270,69 @@ class input {
 			String hpo;
 			String gene;
 			String line;
-			int HPOColumn;
-			int GeneColumn;
+			String[] split;
+			StringBuilder invalidhpo = new StringBuilder(); // array of HPO files that do not exist
+			int HPOColumn = -1;
+			int GeneColumn = -1;
 			Boolean invalid = false;
 			long start, stop, time;
 			start = System.currentTimeMillis();
-			// TODO This section of populateHPOGenes!
+			
 			while ((line = in.readLine()) != null) {
+				// get column numbers for data
 				if (line.contains("#Format: ")) {
-					String[] format = line.substring(9).split("<tab>");
-						for (int i = 0; i < format.length; i++) {
-							if (format[i].equals("HPO-ID")) {
+					split = line.substring(9).split("<tab>");
+						for (int i = 0; i < split.length; i++) {
+							if (split[i].equals("HPO-ID")) {
 								HPOColumn = i;
-							}if (format[i].equals("gene-symbol")) {
+							}if (split[i].equals("gene-symbol")) {
 								GeneColumn = i;
 							}
 						}
 				}
-				if (line.contains("HP:")) {
-					hpo = line.substring(line.indexOf("HP:"), line.indexOf("\t",
+				// get data
+				if (line.contains("HP:") && HPOColumn > -1 && GeneColumn > -1) {
+					/*hpo = line.substring(line.indexOf("HP:"), line.indexOf("\t",
 							line.indexOf("HP:")));
 					gene = line.substring(line.indexOf("\t")+1, line.indexOf("\t",
-							line.indexOf("\t")+1));
+							line.indexOf("\t")+1));*/
+					split = line.split("\t");
+					hpo = split[HPOColumn];
+					gene = split[GeneColumn];
 					if (data.containsKey(hpo)) {
 						data.get(hpo).addGene(gene);
 					}else{
-						// if a non-existant HPO term was found, we notify the user
+						/* if an HPO number does not exist, add it to the invalid
+						 * list and flag the association file for invalid
+						 */
+						invalidhpo.append(hpo+"\n");
 						invalid = true;
 					}
 				}
+				if (data.size() == 0) {
+					/* if the entire data set is empty, something went wrong
+					 * in parsing the association file.
+					 */
+					invalid = true;
+				}
 			}
 			if (invalid)
-				new Error("Some genes were found with unknown HPO numbers,"
-						+ " the HPO data might be outdated or invalid.\n"
-						+ "Make sure your HPO files are up to date.",
-						"Attention",
-						WindowConstants.DISPOSE_ON_CLOSE);
+				if (HPOColumn == -1 || GeneColumn == -1) {
+					new Error("Error in parsing gene file. Please (re)move "
+							+ " or replace the .assoc file in the /HPO/ "
+							+ "folder and try again.",
+							"Parse error",
+							WindowConstants.EXIT_ON_CLOSE);
+				}else{
+					new Error("Some genes were found with unknown HPO numbers,"
+							+ " the HPO data might be outdated or invalid.\n"
+							+ "Make sure your HPO files are up to date.\n\n"
+							+ "List of HPO numbers that occur in the .assoc "
+							+ "file, but not in the .hpo file:\n\n"
+							+ invalidhpo.toString(),
+							"Attention",
+							WindowConstants.DISPOSE_ON_CLOSE);
+				}
 			in.close();
 			stop = System.currentTimeMillis();
 			time = stop - start;
@@ -1265,8 +1380,10 @@ class input {
 					if (!data.containsKey(parent)) {
 						parentObject = new HPONumber(parent, _hpo);
 						data.put(parent, parentObject);
+						_hpo.addParent(parentObject);
 					}else{
 						data.get(parent).addChild(_hpo);
+						_hpo.addParent(data.get(parent));
 					}
 				}
 				if (line.isEmpty()) {
@@ -1303,7 +1420,7 @@ class input {
 	}
 	
 	public boolean isReady() {
-		return state == READY;
+		return state == STATE_READY;
 	}
 }
 	
@@ -1991,7 +2108,7 @@ class input {
 				if (desc.contains("genes:")) {
 					resultobject.generate(desc.substring(6));
 				}else if (desc.contains("tree:")) {
-					HPODATA.browser.show(desc.substring(5));
+					HPODATA.browser.show(desc.substring(5), HPODATA);
 				}
 			}
 		}
@@ -2148,11 +2265,16 @@ class input {
 	final static int NOT = 2;
 	final static int XOR = 3;
 	final static int LIST = 4;
+	public final static int STATE_INSTANTIATED = 0;
+	public final static int STATE_INIT = 1;
+	public final static int STATE_BUILDING = 2;
+	public final static int STATE_READY = 3;
 	private static int OPERATOR = DEFAULT;
 	private String error;
-	private final ExecutorService threadPool = Executors.newFixedThreadPool(5);
+	private int state = STATE_INSTANTIATED;
+	
 
-	input() {
+	Input() {
 		inputs = new ArrayList<userinput>();
 		resultobject = new result();
 		HPOFILES = new HPOFile();
@@ -2239,17 +2361,34 @@ class input {
 	}
 	
 	public void initialize(JFrame pwindow, Container pcontainer) {
+		state = STATE_INIT;
 		parentWindow = pwindow;
 		parentContainer = pcontainer;
 		
-		// start thread that keeps track of the download progress.
+		/* start thread that keeps track of the download progress.
+		 * Swing is not thread safe, and i am sure this is a big no-no
+		 */
 		SwingWorker<Void, Void> updateWorker = new SwingWorker<Void,Void>() {
 			public Void doInBackground() {
-				while (!HPOFILES.isReady()) {
-					parentWindow.setTitle("DeltaGene - Downloading HPO/Association files ("+HPOFILES.getDown()+"kB)");
-				}
-				while (!HPODATA.isReady()) {
-					parentWindow.setTitle("DeltaGene - Building HPO Database...");
+				try { 
+					while (!HPOFILES.isReady()) {
+						Thread.sleep(50);
+						parentWindow.setTitle("DeltaGene - Downloading HPO/Association files ("+HPOFILES.getDown()+"kB)");
+					}
+					while (!HPODATA.isReady()) {
+						if (HPODATA.getState() == HPOObject.STATE_LOAD_HPO) {
+							parentWindow.setTitle("DeltaGene - Building HPO Database...");
+						}else if (HPODATA.getState() == HPOObject.STATE_LOAD_ASSOC){
+							parentWindow.setTitle("DeltaGene - Loading gene associations...");
+						}
+						Thread.sleep(50);
+					}
+				}catch (InterruptedException e) {
+					/* May mess up the window title, but should not 
+					 * do much else
+					 */
+					new Error(Error.UNDEF_ERROR, Error.UNDEF_ERROR_T, WindowConstants.DISPOSE_ON_CLOSE);
+					e.printStackTrace();
 				}
 				parentWindow.setTitle("DeltaGene");
 				return null;
@@ -2257,32 +2396,47 @@ class input {
 		};
 		updateWorker.execute();
 		
-		
-		ac = new Autocomplete(DeltaGene.pool.submit(new Callable<TreeMap<String,String>>() {
+		/* instantialte the autocompletion class with a future treemap
+		 * object. will be ready once the files have been downloaded 
+		 * and the HPO database has been built.
+		 */
+		ac = new Autocomplete(DeltaGene.THREADPOOL.submit(new Callable<TreeMap<String,String>>() {
 			public TreeMap<String,String> call () {
 				try {
-					while (HPODATA.getState() < HPOObject.LOAD_ASSOC) {
+					// While the future object is not yet available, wait
+					while (HPODATA.getState() < HPOObject.STATE_LOAD_ASSOC) {
 						Thread.sleep(100);
 					}
+					/* When done loading, check if user has prompted the
+					 * autocomplete window. if so, will call an insertUpdate()
+					 * event on the input the user has started typing in with
+					 * a null event. see input.Autocomplete.insertUpdate()
+					 */
 					if (ac.isVisible()) {
-						SwingWorker<Void, Void> refreshWorker = new SwingWorker<Void,Void>() {
+						SwingWorker<Void, Void> refreshWorker = 
+								new SwingWorker<Void,Void>() {
 							public Void doInBackground() {
 								ac.insertUpdate(null);
 								return null;
 							}
 						};
+						/* call this on a seperate thread so the gui doesn't
+						 * block
+						 */
 						refreshWorker.execute();
 					}
+					// return the promised object once it's ready
 					return HPODATA.getACList();
-				}catch (Exception e) {
+				}catch (InterruptedException e) {
 					e.printStackTrace();
 					return null;
 				}
 			}
 		}));
-		
+		state = STATE_BUILDING;
 		HPOFILES.LoadFiles();
 		HPODATA.build(this);
+		state = STATE_READY;
 	}
 	
 	void removeInput() {
@@ -2303,5 +2457,13 @@ class input {
 
 	public void setOperator (int op){
 		OPERATOR = op;
+	}
+	
+	public boolean isReady() {
+		return state == STATE_READY;
+	}
+	
+	public int getState() {
+		return state;
 	}
 }

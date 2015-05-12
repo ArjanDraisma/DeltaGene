@@ -77,16 +77,16 @@ public class Gui extends Thread implements ActionListener, ItemListener {
 	 * in the /Help/ directory.
 	 */
 	class HelpClass implements HyperlinkListener {
-		JFrame helpframe = new JFrame("Help"); 		// This JFrame is the help window JFrame 
+		JFrame helpFrame = new JFrame("Help"); 		// This JFrame is the help window JFrame 
 		JEditorPane content = new JEditorPane();	// The content EditorPane will contain the help HTML
-		JScrollPane jsp;							// This is the scrollpane for the 'content' editorpane
+		JScrollPane contentScrollPane;							// This is the scrollpane for the 'content' editorpane
 		
 		HelpClass(String page){
-			helpframe.setPreferredSize(window.getSize()); 	// this sets the size of the help window JFrame, which will be the same as the main window
-			jsp = new JScrollPane(content);				  	// this creates the JScrollPane and sets the content EditorPane as its viewing pane
+			helpFrame.setPreferredSize(mainWindow.getSize()); 	// this sets the size of the help window JFrame, which will be the same as the main window
+			contentScrollPane = new JScrollPane(content);	// this creates the JScrollPane and sets the content EditorPane as its viewing pane
 			content.setEditable(false);						// we do not want the user to be able to edit the EditorPane
 			content.addHyperlinkListener(this);				// this listens for click on hyperlinks, which are used as navigation in the help pages
-			helpframe.add(jsp);								// this adds the jscrollpane, which 'contains' the EditorPane to the help JFrame
+			helpFrame.add(contentScrollPane);								// this adds the jscrollpane, which 'contains' the EditorPane to the help JFrame
 			show(page);
 		}
 		
@@ -100,6 +100,7 @@ public class Gui extends Thread implements ActionListener, ItemListener {
 					content.setPage(e.getURL());
 				}
 			}catch (IOException ioe) {
+				new Error(Error.IO_ERROR, Error.IO_ERROR_T, WindowConstants.DISPOSE_ON_CLOSE);
 				ioe.printStackTrace();
 			}
 		}
@@ -116,9 +117,9 @@ public class Gui extends Thread implements ActionListener, ItemListener {
 				 */
 				URL u = DeltaGene.class.getResource("/Help/"+page+".html");
 				content.setPage(u);		// this sets the html file as the editorpane's content
-				helpframe.pack();		
-				helpframe.setLocationRelativeTo(null); 	// this centers the help/about window
-				helpframe.setVisible(true);
+				helpFrame.pack();		
+				helpFrame.setLocationRelativeTo(null); 	// this centers the help/about window
+				helpFrame.setVisible(true);
 			}catch (IOException e){
 				/* Throw an error if the page files are missing or cannot be opened.
 				 * Considering the help files are packed into the .jar, this really
@@ -132,15 +133,15 @@ public class Gui extends Thread implements ActionListener, ItemListener {
 		}
 	}
 	
-	public static JFrame window;		// This is the main window. 
-	public static Container content;	// This is the root JPanel
-	public static Container inputcontainer;	// This is the container that will hold the input fields and information boxes
-	public int down;					// The amount of bytes downloaded, to be used in the downloadlabel.
-	public boolean downloading = true;	// When this is set to false, the program will remove the downloadLabel	
-	private SpringLayout contentlayout;	// This will contain content layout
-	private BoxLayout inputslayout;		// this will contain inputs layout
-	private static input dgi;			// This will contain an instance of the input object
-	JMenuItem browser;					// this is the menu item for the browser window, which has to be disabled until the HPO database has been compiled
+	public static JFrame mainWindow; 
+	public static Container contentContainer;	
+	public static Container inputContainer;
+	public int down;
+	public boolean downloading = true;	
+	private SpringLayout contentContainerLayout;
+	private BoxLayout inputContainerLayout;
+	private static Input inputInstance;
+	//JMenuItem browserMenuItem;
 	
 	// the constructor class builds the main window and adds the inputs
 	Gui () {
@@ -159,23 +160,38 @@ public class Gui extends Thread implements ActionListener, ItemListener {
 		if (e.getActionCommand().equals("submit")) {
 			SwingWorker<Void,Void> resworker = new SwingWorker<Void,Void>() {
 				public Void doInBackground() {
-					dgi.getResults();
+					inputInstance.getResults();
 					return null;
 				}
 			};
 			resworker.execute();
 		}if (e.getActionCommand().equals("clear")) {
-			dgi.clearInputs();
+			inputInstance.clearInputs();
 		}if (e.getActionCommand().equals("add")) {
-			dgi.addInput(1,1);
+			inputInstance.addInput(1,1);
 		}if (e.getActionCommand().equals("rem")) {
-			dgi.removeInput();
+			inputInstance.removeInput();
 		}if (e.getActionCommand().equals("format")) {
-			dgi.formatGenes();
+			inputInstance.formatGenes();
 		}if (e.getActionCommand().equals("help")) {
 			new HelpClass("index");
 		}if (e.getActionCommand().equals("browser")) {
-			dgi.getData().getBrowser().show("HP:0000001 - All");
+			DeltaGene.THREADPOOL.submit(new Runnable() {
+				@Override
+				public void run() {
+					while (inputInstance.getData().getState() < Input.HPOObject.STATE_LOAD_ASSOC) {
+						try {
+							Thread.sleep(50);
+						} catch (InterruptedException e) {
+							new Error(Error.UNDEF_ERROR, Error.UNDEF_ERROR_T,
+									WindowConstants.DISPOSE_ON_CLOSE);
+							e.printStackTrace();
+						}
+					}
+					inputInstance.getData().getBrowser().show("HP:0000001 - All",
+							inputInstance.getData());
+				}
+			});
 		}if (e.getActionCommand().equals("about")) {
 			new HelpClass("about");
 		}if (e.getActionCommand().equals("exit")) {
@@ -187,68 +203,67 @@ public class Gui extends Thread implements ActionListener, ItemListener {
 	 */
 	public void createAndShowGUI() {
 		// Creates the window for DeltaGene, titled 'DeltaGene'
-		window = new JFrame("DeltaGene");
-		window.setIconImage(new ImageIcon(DeltaGene.class.getResource("/icon.png")).getImage());
+		mainWindow = new JFrame("DeltaGene");
 		/* The menubar will contain a number of dropdown menus
 		 * for opening specific HPO and association files, opening
 		 * the HPO browser and opening the help files.
 		 */
-		JMenuBar menuBar = new JMenuBar();
+		JMenuBar mainMenuBar = new JMenuBar();
 		// The filemenu contains the open and exit button
 		JMenu fileMenu = new JMenu("File");
-		JMenuItem exit = new JMenuItem("Open");
-		JMenuItem open = new JMenuItem("Exit");
+		JMenuItem exitMenuItem = new JMenuItem("Open");
+		JMenuItem openMenuItem = new JMenuItem("Exit");
 		// The tools menu will contain the HPO Browser button
-		JMenu toolsMenu = new JMenu("Tools");
-		browser = new JMenuItem("HPO Browser");
-		JMenuItem format = new JMenuItem("Format gene list");
+		JMenu toolsMenuItem = new JMenu("Tools");
+		JMenuItem browserMenuItem = new JMenuItem("HPO Browser");
+		JMenuItem formatMenuItem = new JMenuItem("Format gene list");
 		// The helpmenu will contain the controls to open help and about
 		JMenu helpMenu = new JMenu("Help");
-		JMenuItem help = new JMenuItem("Help");
-		JMenuItem about = new JMenuItem("About");
+		JMenuItem helpMenuItem = new JMenuItem("Help");
+		JMenuItem aboutMenuItem = new JMenuItem("About");
+		
+
+		mainWindow.setIconImage(new ImageIcon(DeltaGene.class.getResource("/icon.png")).getImage());
 		
 		/* the content container will contain the controls container and 
 		 * input container. 
 		 */
-		content = new Container();
-		// We use a boxlayout to align elements vertically using the PAGE_AXIS
-		content.setLayout(new BoxLayout(content, BoxLayout.PAGE_AXIS));
+		contentContainer = new Container();
 		
 		// This adds all menus and their items to the menubar
-		menuBar.add(fileMenu);						
-		fileMenu.add(exit);	
-		fileMenu.add(open);
-		menuBar.add(toolsMenu);				
-		toolsMenu.add(browser);
-		toolsMenu.add(format);
-		menuBar.add(helpMenu);
-		helpMenu.add(about);
-		helpMenu.add(help);
+		mainMenuBar.add(fileMenu);						
+		fileMenu.add(exitMenuItem);	
+		fileMenu.add(openMenuItem);
+		mainMenuBar.add(toolsMenuItem);
+		toolsMenuItem.add(browserMenuItem);
+		toolsMenuItem.add(formatMenuItem);
+		mainMenuBar.add(helpMenu);
+		helpMenu.add(aboutMenuItem);
+		helpMenu.add(helpMenuItem);
 		
 		/* The buttons work through the use of actioncommands, and
 		 * are handled in actionPerformed
 		 */
-		exit.addActionListener(this);
-		exit.setActionCommand("exit");
-		browser.addActionListener(this);
-		browser.setActionCommand("browser");
+		exitMenuItem.addActionListener(this);
+		exitMenuItem.setActionCommand("exit");
+		browserMenuItem.addActionListener(this);
+		browserMenuItem.setActionCommand("browser");
 		//browser.setEnabled(false);
-		format.addActionListener(this);
-		format.setActionCommand("format");
-		help.addActionListener(this);
-		help.setActionCommand("help");
-		about.addActionListener(this);
-		about.setActionCommand("about");
+		formatMenuItem.addActionListener(this);
+		formatMenuItem.setActionCommand("format");
+		helpMenuItem.addActionListener(this);
+		helpMenuItem.setActionCommand("help");
+		aboutMenuItem.addActionListener(this);
+		aboutMenuItem.setActionCommand("about");
 		
 		// GUI housekeeping
-		window.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-		window.setPreferredSize(new Dimension(700,600));
-		window.setJMenuBar(menuBar);
-		window.setContentPane(content);
-		window.pack();
-		window.setLocationRelativeTo(null);
-		window.setResizable(false);
-		window.setVisible(true);
+		mainWindow.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+		mainWindow.setPreferredSize(new Dimension(700,600));
+		mainWindow.setJMenuBar(mainMenuBar);
+		mainWindow.setContentPane(contentContainer);
+		mainWindow.pack();
+		mainWindow.setLocationRelativeTo(null);
+		mainWindow.setVisible(true);
 	}
 	
 	/* 
@@ -260,16 +275,16 @@ public class Gui extends Thread implements ActionListener, ItemListener {
 		String op = (String)e.getItem();
 		if (e.getStateChange() == ItemEvent.SELECTED) {
 			if (op.equals("Default")) {
-				dgi.setOperator(input.DEFAULT);
+				inputInstance.setOperator(Input.DEFAULT);
 			}
 			if (op.equals("AND")) {
-				dgi.setOperator(input.AND);
+				inputInstance.setOperator(Input.AND);
 			}
 			if (op.equals("NOT")) {
-				dgi.setOperator(input.NOT);
+				inputInstance.setOperator(Input.NOT);
 			}
 			if (op.equals("XOR")) {
-				dgi.setOperator(input.XOR);
+				inputInstance.setOperator(Input.XOR);
 			}
 		}
 	}
@@ -278,80 +293,109 @@ public class Gui extends Thread implements ActionListener, ItemListener {
 		try {
 			// Before initializing
 			// Create an instance of the input class
-			dgi = new input();
-			contentlayout = new SpringLayout();	// create the layout manager for the content container
-			content.setLayout(contentlayout);
+			inputInstance = new Input();
+			// we use a springlayout for content
+			contentContainerLayout = new SpringLayout();
+			contentContainer.setLayout(contentContainerLayout);
 			GridBagConstraints c = new GridBagConstraints();
-			JPanel controls = new JPanel(new FlowLayout());
-			inputcontainer = new Container();
-			inputslayout = new BoxLayout(inputcontainer, BoxLayout.PAGE_AXIS);
+			JPanel controlPanel = new JPanel(new FlowLayout());
+			inputContainer = new Container();
+			inputContainerLayout = new BoxLayout(inputContainer, BoxLayout.PAGE_AXIS);
 			
 			// initialize 
-			DeltaGene.pool.submit(new Runnable() {
+			DeltaGene.THREADPOOL.submit(new Runnable() {
 				@Override
 				public void run() {
-					dgi.initialize(window, inputcontainer);
+					inputInstance.initialize(mainWindow, inputContainer);
 				}
 			});
 			
 			// do while initializing
-			inputcontainer.setLayout(inputslayout);
-			JScrollPane inputssp = new JScrollPane(inputcontainer);
-			Button submitButton = new Button("Compare");
-			Button clearButton = new Button("Clear fields");
-			Button addButton = new Button("Add input");
-			Button remButton = new Button("Remove input");
-			JComboBox<String> operand;
+			inputContainer.setLayout(inputContainerLayout);
+			JScrollPane inputScrollPane = new JScrollPane(inputContainer);
+			final Button submitButton = new Button("Compare");
+			final Button clearButton = new Button("Clear fields");
+			final Button addButton = new Button("Add input");
+			Button removeButton = new Button("Remove input");
+			JComboBox<String> operandSelectionBox;
 			String[] operators = {"Default", "AND", "NOT", "XOR"};
 			c.insets = new Insets(2,2,2,2);
 			
 			
 			submitButton.addActionListener(this);
-			clearButton.addActionListener(this);
-			addButton.addActionListener(this);
-			remButton.addActionListener(this);
 			submitButton.setActionCommand("submit");
+			submitButton.setEnabled(false);
+			controlPanel.add(submitButton,c);
+			
+			clearButton.addActionListener(this);
 			clearButton.setActionCommand("clear");
+			clearButton.setEnabled(false);
+			controlPanel.add(clearButton,c);
+			
+			addButton.addActionListener(this);
 			addButton.setActionCommand("add");
-			remButton.setActionCommand("rem");
-			controls.add(submitButton,c);
-			controls.add(clearButton,c);
-			controls.add(addButton,c);
-			controls.add(remButton,c);
-			operand = new JComboBox<String>(operators);
-			operand.addItemListener(this);
-			controls.add(operand);
+			addButton.setEnabled(false);
+			controlPanel.add(addButton,c);
+			
+			removeButton.addActionListener(this);
+			removeButton.setActionCommand("rem");
+			removeButton.setEnabled(false);
+			controlPanel.add(removeButton,c);
+			
+			operandSelectionBox = new JComboBox<String>(operators);
+			operandSelectionBox.addItemListener(this);
+			controlPanel.add(operandSelectionBox);
 			c.insets.set(5, 5, 5, 5);
 			c.weighty = 0;
 			c.weightx = 1;
 			c.anchor = GridBagConstraints.NORTH;
 			c.fill = GridBagConstraints.HORIZONTAL;
-			controls.setBorder(BorderFactory.createDashedBorder(Color.gray));
-			controls.setPreferredSize(new Dimension(
-					window.getContentPane().getWidth()-10, 40));
+			controlPanel.setBorder(BorderFactory.createDashedBorder(Color.gray));
+			controlPanel.setPreferredSize(new Dimension(
+					mainWindow.getContentPane().getWidth()-10, 40));
 			
-			contentlayout.putConstraint(SpringLayout.WEST, controls, 5,
-					SpringLayout.WEST, window.getContentPane());
-			contentlayout.putConstraint(SpringLayout.NORTH, controls, 5,
-					SpringLayout.NORTH, window.getContentPane());
-			window.getContentPane().add(controls);
-			inputssp.setPreferredSize(new Dimension(
-					window.getContentPane().getWidth()-10,
-					window.getContentPane().getHeight()-controls.getHeight()-50));
-			inputssp.setHorizontalScrollBarPolicy(
+			contentContainerLayout.putConstraint(SpringLayout.WEST, controlPanel, 5,
+					SpringLayout.WEST, mainWindow.getContentPane());
+			contentContainerLayout.putConstraint(SpringLayout.NORTH, controlPanel, 5,
+					SpringLayout.NORTH, mainWindow.getContentPane());
+			mainWindow.getContentPane().add(controlPanel);
+			inputScrollPane.setPreferredSize(new Dimension(
+					mainWindow.getContentPane().getWidth()-10,
+					mainWindow.getContentPane().getHeight()-controlPanel.getHeight()
+					-50));
+			inputScrollPane.setHorizontalScrollBarPolicy(
 					JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
-			inputssp.setVerticalScrollBarPolicy(
+			inputScrollPane.setVerticalScrollBarPolicy(
 					JScrollPane.VERTICAL_SCROLLBAR_ALWAYS);
-			contentlayout.putConstraint(SpringLayout.WEST, inputssp, 5, 
-					SpringLayout.WEST, window.getContentPane());
-			contentlayout.putConstraint(SpringLayout.NORTH, inputssp, 5,
-					SpringLayout.SOUTH, controls);
-			window.getContentPane().add(inputssp);
-			window.revalidate();
-			window.repaint();
+			contentContainerLayout.putConstraint(SpringLayout.WEST, inputScrollPane, 5, 
+					SpringLayout.WEST, mainWindow.getContentPane());
+			contentContainerLayout.putConstraint(SpringLayout.NORTH, inputScrollPane, 5,
+					SpringLayout.SOUTH, controlPanel);
+			mainWindow.getContentPane().add(inputScrollPane);
+			mainWindow.revalidate();
+			mainWindow.repaint();
 			
-			dgi.addInput(1,0);
-			dgi.addInput(1,1);
+			// 
+			DeltaGene.THREADPOOL.submit(new Runnable() {
+				@Override
+				public void run() {
+					while (inputInstance.getState() < Input.STATE_BUILDING) {
+						try {
+							Thread.sleep(50);
+						}catch (InterruptedException e) {
+							new Error(Error.CRIT_ERROR, Error.CRIT_ERROR_T,
+									WindowConstants.EXIT_ON_CLOSE, e);
+							e.printStackTrace();
+						}
+					}
+					addButton.setEnabled(true);
+					clearButton.setEnabled(true);
+					submitButton.setEnabled(true);
+					inputInstance.addInput(1,0);
+					inputInstance.addInput(1,1);
+				}
+			});
+			
 		}catch (Exception e) {
 			e.printStackTrace();
 		}

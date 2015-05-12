@@ -31,8 +31,7 @@
  * For more information, please refer to <http://unlicense.org/>
  * 
  * Of course, this also means that you are free to post any snippets on
- * your favorite website mocking bad code. I know I am not a professional
- * programmer. Know that this program was written with the best intentions.
+ * your favorite website mocking bad code.
  */
 
 package DeltaGene;
@@ -50,12 +49,14 @@ import javax.swing.WindowConstants;
  */
 class DeltaGene {
 	
-	public static Gui dggui;				// instance of the Gui class
+	public static Gui guiInstance;				// instance of the Gui class
 	// these constants are used throughout multiple classes
 	public final static int INPUTH = 126;	// Height of the input box
 	public final static int INFOH = 92;		// Height of the info box
 	public final static int INPUTPAD = 10;	// padding between the inputbox and infobox
-	public final static ExecutorService pool = Executors.newFixedThreadPool(5);
+	
+	public final static ExecutorService THREADPOOL = Executors.newFixedThreadPool(5);
+	// in case of command line mode, we do not enable the gui
 	public static boolean enableGui = true;
 	
 	public static void main(String[] args) {
@@ -98,7 +99,7 @@ class DeltaGene {
 				// Any updates to the UI must happen on the event dispatching thread
 				javax.swing.SwingUtilities.invokeAndWait(new Runnable() {
 					public void run() {
-						dggui = new Gui();
+						guiInstance = new Gui();
 					}
 				});
 			}else{
@@ -112,10 +113,7 @@ class DeltaGene {
 			 * Could happen when something interrupts invokeAndWait above,
 			 * is not expected to ever happen.
 			 */
-			new Error("Unspecified error! Restart the program as administrator and try again.\n"
-					+ "If this problem persists, report an issue with the following text:\n\n"
-					+ "Stack trace:\n"
-					+e.getStackTrace(),"Critical error!", WindowConstants.EXIT_ON_CLOSE);
+			new Error(Error.UNDEF_ERROR,Error.UNDEF_ERROR_T, WindowConstants.EXIT_ON_CLOSE);
 		}
 	}
 }
