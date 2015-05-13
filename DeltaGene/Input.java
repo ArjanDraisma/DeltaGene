@@ -63,6 +63,8 @@ import java.util.Collections;
 import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Hashtable;
+import java.util.Stack;
 import java.util.TreeMap;
 import java.util.concurrent.Callable;
 import java.util.concurrent.Future;
@@ -71,8 +73,12 @@ import javax.swing.event.DocumentListener;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.HyperlinkEvent;
 import javax.swing.event.HyperlinkListener;
+import javax.swing.plaf.TreeUI;
 import javax.swing.text.Document;
 import javax.swing.tree.DefaultMutableTreeNode;
+import javax.swing.tree.ExpandVetoException;
+import javax.swing.tree.TreeModel;
+import javax.swing.tree.TreeNode;
 import javax.swing.tree.TreePath;
 import javax.swing.JButton;
 import javax.swing.JEditorPane;
@@ -571,12 +577,123 @@ class Input {
 			class HPOTree extends JTree {
 				private static final long serialVersionUID = 1L;
 
+		        Stack expandedStack = new Stack();
+		        Hashtable expandedState = new Hashtable();
+		        private static final int TEMP_STACK_SIZE = 11;
+
+		        
 				/**
 				 * @param node the root node
 				 */
 				HPOTree(DefaultMutableTreeNode node) {
 					super(node);
 					
+				}
+
+				@Override
+				protected void setExpandedState(TreePath path, boolean state) {
+			        if(path != null) {
+			            // Make sure all parents of path are expanded.
+			            Stack         stack;
+			            TreePath      parentPath = path.getParentPath();
+
+			            if (expandedStack.size() == 0) {
+			                stack = new Stack();
+			            }
+			            else {
+			                stack = (Stack)expandedStack.pop();
+			            }
+
+			            try {
+			                while(parentPath != null) {
+			                    if(isExpanded(parentPath)) {
+			                        parentPath = null;
+			                    }
+			                    else {
+			                        stack.push(parentPath);
+			                        parentPath = parentPath.getParentPath();
+			                    }
+			                }
+			                for(int counter = stack.size() - 1; counter >= 0; counter--) {
+			                    parentPath = (TreePath)stack.pop();
+			                    if(!isExpanded(parentPath)) {
+			                        try {
+			                            fireTreeWillExpand(parentPath);
+			                        } catch (ExpandVetoException eve) {
+			                            // Expand vetoed!
+			                            return;
+			                        }
+			                        expandedState.put(parentPath, Boolean.TRUE);
+			                        fireTreeExpanded(parentPath);
+			                        if (accessibleContext != null) {
+			                            ((AccessibleJTree)accessibleContext).
+			                                              fireVisibleDataPropertyChange();
+			                        }
+			                    }
+			                }
+			            }
+			            finally {
+			                if (expandedStack.size() < TEMP_STACK_SIZE) {
+			                    stack.removeAllElements();
+			                    expandedStack.push(stack);
+			                }
+			            }
+			            if(!state) {
+			                // collapse last path.
+			                Object          cValue = expandedState.get(path);
+
+			                if(cValue != null && ((Boolean)cValue).booleanValue()) {
+			                    try {
+			                        fireTreeWillCollapse(path);
+			                    }
+			                    catch (ExpandVetoException eve) {
+			                        return;
+			                    }
+			                    expandedState.put(path, Boolean.FALSE);
+			                    fireTreeCollapsed(path);
+			                    if (removeDescendantSelectedPaths(path, false) &&
+			                        !isPathSelected(path)) {
+			                        // A descendant was selected, select the parent.
+			                        addSelectionPath(path);
+			                    }
+			                    if (accessibleContext != null) {
+			                        ((AccessibleJTree)accessibleContext).
+			                                    fireVisibleDataPropertyChange();
+			                    }
+			                }
+			            }
+			            else {
+			                // Expand last path.
+			                Object          cValue = expandedState.get(path);
+
+			                if(cValue == null || !((Boolean)cValue).booleanValue()) {
+			                    try {
+			                        fireTreeWillExpand(path);
+			                    }
+			                    catch (ExpandVetoException eve) {
+			                        return;
+			                    }
+			                    expandedState.put(path, Boolean.TRUE);
+			                    fireTreeExpanded(path);
+			                    if (accessibleContext != null) {
+			                        ((AccessibleJTree)accessibleContext).
+			                                          fireVisibleDataPropertyChange();
+			                    }
+			                }
+			            }
+			        }
+			    }
+				
+				@Override
+				public void expandPath(TreePath path) {
+					 // Only expand if not leaf!
+					TreeModel  model = getModel();
+
+					if(path != null && model != null &&
+						!model.isLeaf(path.getLastPathComponent())
+						&& !isExpanded(path)) {
+						setExpandedState(path, true);
+					}
 				}
 				
 				/**
@@ -588,14 +705,44 @@ class Input {
 					}
 				}
 				
-				/**
-				 * Expands all nodes
-				 */
-				public void expandAll() {
-					for (int i = this.getRowCount()-1; i > 0; i--) {
-						this.expandRow(i);
-					}
-				}
+				public void expandAll(JTree tree, boolean expand) {
+			        TreeNode root = (TreeNode)tree.getModel().getRoot();
+			        if (root!=null) {   
+			            // Traverse tree from root
+			            expandAll(tree, new TreePath(root), expand);
+			        }
+			    }
+
+			    /**
+			     * @return Whether an expandPath was called for the last node in the parent path
+			     */
+			    private boolean expandAll(JTree tree, TreePath parent, boolean expand) {
+	            	TreeUI ui = this.getUI();
+	            	this.setUI(null);
+			        // Traverse children
+			        TreeNode node = (TreeNode)parent.getLastPathComponent();
+			        if (node.getChildCount() > 0) {
+			            boolean childExpandCalled = false;
+			            for (Enumeration<?> e = node.children(); e.hasMoreElements(); ) {
+			                TreeNode n = (TreeNode)e.nextElement();
+			                TreePath path = parent.pathByAddingChild(n);
+			                childExpandCalled = expandAll(tree, path, expand) || childExpandCalled; // the OR order is important here, don't let childExpand first. func calls will be optimized out !
+			            }
+
+			            if (!childExpandCalled) { // only if one of the children hasn't called already expand
+			                // Expansion or collapse must be done bottom-up, BUT only for non-leaf nodes
+			                if (expand) {
+			                    tree.expandPath(parent);
+			                } else {
+			                    tree.collapsePath(parent);
+			                }
+			            }
+		                this.setUI(ui);
+			            return true;
+			        } else {
+			            return false;
+			        }
+			    }
 			}
 			
 			private DefaultMutableTreeNode rootNode = 
@@ -669,6 +816,7 @@ class Input {
 				
 				hpoBrowserTree.addMouseListener(this);
 				hpoBrowserTree.setExpandsSelectedPaths(true);
+				hpoBrowserTree.setLargeModel(true);
 			
 				DeltaGene.THREADPOOL.submit(new Runnable() {
 					@Override
@@ -683,22 +831,33 @@ class Input {
 							}
 						}
 						treeScrollPane.remove(waitlabel);
-						//rootNode.add(hpodata.getHPOHeirarchy("HP:0000001"));
 						treeScrollPane.setViewportView(hpoBrowserTree);
+						rootNode.add(hpodata.getHPOHeirarchy("HP:0000001"));
 						state = STATE_READY;
 					}
 				});
 			}
 			@Override
 			public void actionPerformed(ActionEvent e) {
+				Long start, stop, time;
 				if (e.getActionCommand().equals("search")&&searchField.getText().length()>0) {
+					start = System.currentTimeMillis();
 					hpoBrowserTree.clearSelection();
 					hpoBrowserTree.collapseAll();
 					ArrayList<TreePath> AL = find(rootNode, searchField.getText());
+					stop = System.currentTimeMillis();
+					time = stop - start;
+					System.out.println("find: "+time+" millis");
 					for (TreePath path : AL) {
 						hpoBrowserTree.makeVisible(path);
 					}
+					stop = System.currentTimeMillis();
+					time = stop - start - time;
+					System.out.println("makevisible loop: "+time+" millis");
 					hpoBrowserTree.setSelectionPaths(AL.toArray(new TreePath[AL.size()]));
+					stop = System.currentTimeMillis();
+					time = stop - start - time;
+					System.out.println("setselection: "+time+" millis");
 					//TreePath[] paths = new TreePath[AL.size()];
 					//paths = AL.toArray(paths);
 				}if (e.getActionCommand().equals("list")) {
@@ -822,17 +981,15 @@ class Input {
 							addButton.setEnabled(true);
 							addButton.setActionCommand("add:"+input.getID());
 						}
-						rootNode.removeAllChildren();
-						//DefaultMutableTreeNode search = hpoData.getHPOHeirarchy(hpo);
-						DefaultMutableTreeNode search = hpoData.getReverseHPOHeirarchy(new DefaultMutableTreeNode(hpo));
-						rootNode.add(search);
-						hpoBrowserTree.expandAll();
-						//hpoBrowserTree.clearSelection();
-						//hpoBrowserTree.collapseAll();
-						/*for (TreePath path : find(rootNode, hpo)) {
+						//rootNode.removeAllChildren();
+						//DefaultMutableTreeNode search = hpoData.getReverseHPOHeirarchy(new DefaultMutableTreeNode(hpo));
+						//hpoBrowserTree.expandAll();
+						hpoBrowserTree.clearSelection();
+						hpoBrowserTree.collapseAll();
+						for (TreePath path : find(rootNode, hpo)) {
 							hpoBrowserTree.makeVisible(path);
 							hpoBrowserTree.addSelectionPath(path);
-						}*/
+						}
 					}
 				});
 			}
