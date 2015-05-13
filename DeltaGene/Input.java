@@ -594,8 +594,8 @@ class Input {
 				protected void setExpandedState(TreePath path, boolean state) {
 			        if(path != null) {
 			            // Make sure all parents of path are expanded.
-			            Stack         stack;
-			            TreePath      parentPath = path.getParentPath();
+			            Stack stack;
+			            TreePath parentPath = path.getParentPath();
 
 			            if (expandedStack.size() == 0) {
 			                stack = new Stack();
@@ -700,6 +700,7 @@ class Input {
 				 * Collapses all (opened) nodes.
 				 */
 				public void collapseAll() {
+					System.out.println("coll");
 					for (int i = this.getRowCount()-1; i > 0; i--) {
 						this.collapseRow(i);
 					}
@@ -707,7 +708,7 @@ class Input {
 				
 				public void expandAll(JTree tree, boolean expand) {
 			        TreeNode root = (TreeNode)tree.getModel().getRoot();
-			        if (root!=null) {   
+			        if (root!=null) {
 			            // Traverse tree from root
 			            expandAll(tree, new TreePath(root), expand);
 			        }
@@ -843,7 +844,7 @@ class Input {
 				if (e.getActionCommand().equals("search")&&searchField.getText().length()>0) {
 					start = System.currentTimeMillis();
 					hpoBrowserTree.clearSelection();
-					hpoBrowserTree.collapseAll();
+					hpoBrowserTree.expandAll(hpoBrowserTree, false);
 					ArrayList<TreePath> AL = find(rootNode, searchField.getText());
 					stop = System.currentTimeMillis();
 					time = stop - start;
