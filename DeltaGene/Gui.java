@@ -188,7 +188,7 @@ public class Gui extends Thread implements ActionListener, ItemListener {
 							e.printStackTrace();
 						}
 					}
-					inputInstance.getData().getBrowser().show("HP:0000001 - All",
+					inputInstance.getData().getBrowser().showHPOHeirarchy("HP:0000001",
 							inputInstance.getData());
 				}
 			});
@@ -293,7 +293,7 @@ public class Gui extends Thread implements ActionListener, ItemListener {
 		try {
 			// Before initializing
 			// Create an instance of the input class
-			inputInstance = new Input();
+			inputInstance = new Input(null, null, null, null, null, true, false);
 			// we use a springlayout for content
 			contentContainerLayout = new SpringLayout();
 			contentContainer.setLayout(contentContainerLayout);

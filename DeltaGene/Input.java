@@ -34,6 +34,7 @@
 package DeltaGene;
 
 import java.awt.Color;
+import java.awt.Component;
 import java.awt.Container;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
@@ -73,9 +74,11 @@ import javax.swing.event.DocumentListener;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.HyperlinkEvent;
 import javax.swing.event.HyperlinkListener;
+import javax.swing.event.TreeModelListener;
 import javax.swing.plaf.TreeUI;
 import javax.swing.text.Document;
 import javax.swing.tree.DefaultMutableTreeNode;
+import javax.swing.tree.DefaultTreeCellRenderer;
 import javax.swing.tree.ExpandVetoException;
 import javax.swing.tree.TreeModel;
 import javax.swing.tree.TreeNode;
@@ -97,13 +100,10 @@ import javax.swing.JTextArea;
 import javax.swing.JTextField;
 import javax.swing.JTree;
 import javax.swing.ScrollPaneConstants;
+import javax.swing.SwingUtilities;
 import javax.swing.SwingWorker;
 import javax.swing.UIManager;
 import javax.swing.WindowConstants;
-
-import com.sun.org.apache.xerces.internal.impl.xs.SubstitutionGroupHandler;
-
-//import DeltaGene.input.Browser.HPOTree;
 
 /**
  * This class handles input from the user, generating headers and generating 
@@ -566,7 +566,7 @@ class Input {
 	 * The HPOObject subclass contains many methods related to looking up sets of HPONumbers,
 	 * and contains the HPONumber collection and the HPONumbers class itself.
 	 */
-	static class HPOObject {
+	static class HPOObject implements TreeModel {
 		class Browser implements KeyListener, 
 		MouseListener, ActionListener {
 			/**
@@ -577,31 +577,62 @@ class Input {
 			class HPOTree extends JTree {
 				private static final long serialVersionUID = 1L;
 
-		        Stack expandedStack = new Stack();
-		        Hashtable expandedState = new Hashtable();
+		        Stack<Stack<TreePath>> expandedStack = new Stack<Stack<TreePath>>();
+		        Hashtable<TreePath, Boolean> expandedState = new Hashtable<TreePath, Boolean>();
 		        private static final int TEMP_STACK_SIZE = 11;
 
 		        
 				/**
 				 * @param node the root node
 				 */
-				HPOTree(DefaultMutableTreeNode node) {
+				HPOTree(TreeNode node) {
 					super(node);
-					
+					DefaultTreeCellRenderer customRenderer = 
+							new DefaultTreeCellRenderer() {
+							
+							private static final long serialVersionUID = 2L;
+
+							public Component getTreeCellRendererComponent(
+									JTree tree, Object value, boolean sel,
+									boolean expanded, boolean leaf, int row,
+									boolean hasFocus) {
+								if ((value != null) && value instanceof TreeNode) {
+									HPONumber hpoNode = (HPONumber)value;
+									this.setText(hpoNode.hpo()
+											+" - "+hpoNode.phenotype());
+									this.selected = sel;
+									if (sel) {
+										super.setBackground(getBackgroundSelectionColor());
+										setForeground(this.getTextSelectionColor());
+									}else{
+										super.setBackground(getBackgroundNonSelectionColor());
+										setForeground(this.getTextNonSelectionColor());
+									}
+									return this;
+								}
+								return new JLabel("null");
+							}
+						};
+						this.setCellRenderer(customRenderer);
 				}
 
+				/**
+				 * For some reason, having this here makes expanding
+				 * a lot of nodes a lot faster as opposed to using JTree's
+				 * native setExpandedState
+				 */
 				@Override
 				protected void setExpandedState(TreePath path, boolean state) {
-			        if(path != null) {
+				    if(path != null) {
 			            // Make sure all parents of path are expanded.
-			            Stack stack;
-			            TreePath parentPath = path.getParentPath();
+			            Stack<TreePath>         stack;
+			            TreePath      parentPath = path.getParentPath();
 
 			            if (expandedStack.size() == 0) {
-			                stack = new Stack();
+			                stack = new Stack<TreePath>();
 			            }
 			            else {
-			                stack = (Stack)expandedStack.pop();
+			                stack = (Stack<TreePath>)expandedStack.pop();
 			            }
 
 			            try {
@@ -683,26 +714,17 @@ class Input {
 			            }
 			        }
 			    }
+
+				
 				
 				@Override
 				public void expandPath(TreePath path) {
-					 // Only expand if not leaf!
 					TreeModel  model = getModel();
-
+					
 					if(path != null && model != null &&
 						!model.isLeaf(path.getLastPathComponent())
 						&& !isExpanded(path)) {
 						setExpandedState(path, true);
-					}
-				}
-				
-				/**
-				 * Collapses all (opened) nodes.
-				 */
-				public void collapseAll() {
-					System.out.println("coll");
-					for (int i = this.getRowCount()-1; i > 0; i--) {
-						this.collapseRow(i);
 					}
 				}
 				
@@ -746,8 +768,8 @@ class Input {
 			    }
 			}
 			
-			private DefaultMutableTreeNode rootNode = 
-					new DefaultMutableTreeNode("Human Phenotype Ontology");
+			//private DefaultMutableTreeNode rootNode = new DefaultMutableTreeNode("Human Phenotype Ontology");
+			//private DefaultMutableTreeNode HPOTree;
 			private JFrame browserWindow;
 			private JPanel browserContentPanel;
 			private HPOTree hpoBrowserTree;
@@ -778,7 +800,7 @@ class Input {
 				addButton = new JButton("Add to input");
 				final JLabel waitlabel = new JLabel("Please wait until the HPO database"
 						+ "has finished loading...");
-				hpoBrowserTree = new HPOTree(rootNode);
+				hpoBrowserTree = new HPOTree((HPONumber)hpodata.getRoot());
 				final GridBagConstraints c = new GridBagConstraints();
 				
 				browserWindow.setPreferredSize(new Dimension(700,600));
@@ -833,7 +855,6 @@ class Input {
 						}
 						treeScrollPane.remove(waitlabel);
 						treeScrollPane.setViewportView(hpoBrowserTree);
-						rootNode.add(hpodata.getHPOHeirarchy("HP:0000001"));
 						state = STATE_READY;
 					}
 				});
@@ -859,8 +880,6 @@ class Input {
 					stop = System.currentTimeMillis();
 					time = stop - start - time;
 					System.out.println("setselection: "+time+" millis");
-					//TreePath[] paths = new TreePath[AL.size()];
-					//paths = AL.toArray(paths);
 				}if (e.getActionCommand().equals("list")) {
 					TreePath[] paths = hpoBrowserTree.getSelectionPaths();
 					StringBuilder sb = new StringBuilder();
@@ -895,13 +914,10 @@ class Input {
 				browserMenu.setVisible(true);
 			}
 			
-			private ArrayList<TreePath> find(DefaultMutableTreeNode parent, String hpo) {
+			private ArrayList<TreePath> find(HPONumber parent, String hpo) {
 				ArrayList<TreePath> outAL = new ArrayList<TreePath>();
-				@SuppressWarnings("unchecked")
-				Enumeration<DefaultMutableTreeNode> e = parent.children();
-				while (e.hasMoreElements()) {
-					DefaultMutableTreeNode child = e.nextElement();
-					if (child.getUserObject().toString().toLowerCase().contains(hpo.toLowerCase())) {
+				for (HPONumber child : parent.getChildren()) {
+					if (child.hpo().equals(hpo)) {
 						outAL.add(new TreePath(child.getPath()));
 					}
 					if (child.getChildCount() > 0) {
@@ -955,18 +971,16 @@ class Input {
 			@Override
 			public void mouseReleased(MouseEvent e) {
 			}
-			public void show(String hpo, HPOObject hpoData) {
+			
+			public void showHPOHeirarchy(String hpo, HPOObject hpoData) {
 				addButton.setEnabled(false);
-				show(hpo, hpoData, null);
+				showHPOHeirarchy(hpo, hpoData, null);
 			}
 		
-			public void show(final String hpo, final HPOObject hpoData, final userinput input) {
+			public void showHPOHeirarchy(final String hpo, final HPOObject hpoData, final userinput input) {
 				browserWindow.pack();
 				browserWindow.setLocationRelativeTo(null);
 				browserWindow.setVisible(true);
-				browserWindow.revalidate();
-				browserWindow.repaint();
-				browserWindow.pack();
 				DeltaGene.THREADPOOL.submit(new Runnable() {
 					@Override
 					public void run() {
@@ -974,7 +988,6 @@ class Input {
 							try {
 								Thread.sleep(50);
 							} catch (InterruptedException e) {
-								// TODO Auto-generated catch block
 								e.printStackTrace();
 							}
 						}
@@ -982,13 +995,9 @@ class Input {
 							addButton.setEnabled(true);
 							addButton.setActionCommand("add:"+input.getID());
 						}
-						//rootNode.removeAllChildren();
-						//DefaultMutableTreeNode search = hpoData.getReverseHPOHeirarchy(new DefaultMutableTreeNode(hpo));
-						//hpoBrowserTree.expandAll();
 						hpoBrowserTree.clearSelection();
-						hpoBrowserTree.collapseAll();
 						for (TreePath path : find(rootNode, hpo)) {
-							hpoBrowserTree.makeVisible(path);
+							hpoBrowserTree.expandPath(path);
 							hpoBrowserTree.addSelectionPath(path);
 						}
 					}
@@ -998,19 +1007,29 @@ class Input {
 			boolean isReady() {
 				return state == STATE_READY;
 			}
+			public void showGenesUnderHPO(String substring, HPOObject HpoData) {
+				String[] HPOListUnderGene;
+				for (String gene : substring.split("[^A-Z0-9\\-]")) {
+					HPOListUnderGene = HpoData.getHPOFromGene(gene);
+					for (String hpoid : HPOListUnderGene) {
+						
+					}
+				}
+			}
 		}
 
 		/**
 		 * The HPONumber (sub)subclass contains information about a particular HPO term,
 		 * such as it's HPO number, phenotype, definition, genes and it's children/parents
 		 */
-		class HPONumber {
+		class HPONumber implements TreeNode {
 			private String hpoid = "Undefined";
 			private String phenotype = "Undefined";
 			private String definition = "Undefined";
 			private HashSet<String> geneSet = new HashSet<String>();
 			private ArrayList<HPONumber> children = new ArrayList<HPONumber>();
 			private ArrayList<HPONumber> parents = new ArrayList<HPONumber>();
+			private boolean expandedByDefault = false;
 			
 			HPONumber (String hpo) {
 				set(hpo);
@@ -1202,6 +1221,50 @@ class Input {
 			public void setPhenotype(String pheno) {
 				phenotype = pheno;
 			}
+			@Override
+			public Enumeration<HPONumber> children() {
+				return Collections.enumeration(children);
+			}
+			@Override
+			public boolean getAllowsChildren() {
+				return true;
+			}
+			@Override
+			public TreeNode getChildAt(int i) {
+				return children.get(i);
+			}
+			@Override
+			public int getIndex(TreeNode node) {
+				return children.indexOf(((HPONumber)node));
+			}
+			@Override
+			public TreeNode getParent() {
+				return parents.size() > 0 ? parents.get(0) : null;
+			}
+			@Override
+			public boolean isLeaf() {
+				return children.size() == 0;
+			}
+			public TreeNode[] getPath() {
+				return getPathToRoot(this,0);
+			}
+			protected TreeNode[] getPathToRoot(TreeNode node, int depth) {
+				if (node == null) {
+					if (depth == 0) {
+						return null;
+					}
+					return new TreeNode[depth];
+				}
+				TreeNode[] path = getPathToRoot(node.getParent(), depth+1);
+				path[path.length - depth - 1] = node;
+				return path;
+			}
+			public void setExpandedByDefault(boolean b) {
+				expandedByDefault = b;
+			}
+			public boolean getExpandedByDefault() {
+				return expandedByDefault;
+			}
 		}
 		
 		/*
@@ -1218,10 +1281,14 @@ class Input {
 		final static int STATE_LOAD_ASSOC = 3;
 		final static int STATE_READY = 4;
 		private static int state;
+		private static HPONumber rootNode;
 		
 		HPOObject(HPOFile hpofile) {
 			state = STATE_INIT;
 			files = hpofile;
+			rootNode = new HPONumber("HP:0000000", "Root",
+					"Root node for the Human Phenotype Ontology");
+			data.put("HP:0000000", rootNode);
 		}
 		
 		// Finds the path of a given hpo number from bottom to top
@@ -1249,6 +1316,9 @@ class Input {
 				state = STATE_LOAD_ASSOC;
 				populateHPOGenes(files.getAssocFile());
 				state = STATE_READY;
+				rootNode.addChild(data.get("HP:0000001"));
+				rootNode.setExpandedByDefault(true);
+				data.get("HP:0000001").setExpandedByDefault(true);
 				inputinstance.notify();
 			}catch (InterruptedException e) {
 				e.printStackTrace();
@@ -1298,6 +1368,7 @@ class Input {
 		public Browser getBrowser() {
 			return browser;
 		}
+		
 		/**
 		 * This function returns a HPO number that belongs to a given phenotype.
 		 * Phenotypes should be unique. Regardless, this function returns the 
@@ -1312,6 +1383,16 @@ class Input {
 				}
 			}
 			return null;
+		}
+		
+		public String[] getHPOFromGene(String gene) {
+			ArrayList<String> out = new ArrayList<String>();
+			for (HPONumber hpo : data.values()) {
+				if (hpo.geneSet.contains(gene)) {
+					out.add(hpo.hpoid);
+				}
+			}
+			return out.toArray(new String[out.size()]);
 		}
 		
 		/**
@@ -1450,10 +1531,6 @@ class Input {
 				}
 				// get data
 				if (line.contains("HP:") && HPOColumn > -1 && GeneColumn > -1) {
-					/*hpo = line.substring(line.indexOf("HP:"), line.indexOf("\t",
-							line.indexOf("HP:")));
-					gene = line.substring(line.indexOf("\t")+1, line.indexOf("\t",
-							line.indexOf("\t")+1));*/
 					split = line.split("\t");
 					hpo = split[HPOColumn];
 					gene = split[GeneColumn];
@@ -1579,6 +1656,49 @@ class Input {
 	
 	public boolean isReady() {
 		return state == STATE_READY;
+	}
+
+	@Override
+	public void addTreeModelListener(TreeModelListener arg0) {
+		// TODO Auto-generated method stub
+		
+	}
+
+	@Override
+	public Object getChild(Object node, int i) {
+		return ((HPONumber)node).getChildAt(i);
+	}
+
+	@Override
+	public int getChildCount(Object node) {
+		return ((HPONumber)node).getChildCount();
+	}
+
+	@Override
+	public int getIndexOfChild(Object node, Object child) {
+		return ((HPONumber)node).getIndex((HPONumber)child);
+	}
+
+	@Override
+	public Object getRoot() {
+		return rootNode;
+	}
+
+	@Override
+	public boolean isLeaf(Object node) {
+		return ((HPONumber)node).isLeaf();
+	}
+
+	@Override
+	public void removeTreeModelListener(TreeModelListener arg0) {
+		// TODO Auto-generated method stub
+		
+	}
+
+	@Override
+	public void valueForPathChanged(TreePath arg0, Object arg1) {
+		// TODO Auto-generated method stub
+		
 	}
 }
 	
@@ -2266,7 +2386,9 @@ class Input {
 				if (desc.contains("genes:")) {
 					resultobject.generate(desc.substring(6));
 				}else if (desc.contains("tree:")) {
-					HPODATA.browser.show(desc.substring(5), HPODATA);
+					HPODATA.browser.showHPOHeirarchy(desc.substring(5), HPODATA);
+				}else if (desc.equals("hpogenes")) {
+					HPODATA.browser.showGenesUnderHPO(desc.substring(8), HPODATA);
 				}
 			}
 		}
@@ -2383,7 +2505,9 @@ class Input {
 				}
 				break;
 			case 3:
-				infobox.setText("Type: List of genes");
+				infobox.setText("Type: List of genes. "
+						+ "<a href=\"findhpo\">Find HPO numbers associated "
+						+ "with genes</a>");
 				break;
 			case 4:
 				sb.append("Type: List of numbers (Parsed as HPO numbers):");
@@ -2432,7 +2556,7 @@ class Input {
 	private int state = STATE_INSTANTIATED;
 	
 
-	Input() {
+	Input(String aArg, String bArg, String e, String fh, String fa, boolean enableGui, boolean verbose) {
 		inputs = new ArrayList<userinput>();
 		resultobject = new result();
 		HPOFILES = new HPOFile();

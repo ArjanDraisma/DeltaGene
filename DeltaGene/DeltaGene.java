@@ -57,13 +57,18 @@ class DeltaGene {
 	
 	public final static ExecutorService THREADPOOL = Executors.newFixedThreadPool(5);
 	// in case of command line mode, we do not enable the gui
-	public static boolean enableGui = true;
 	
 	public static void main(String[] args) {
 		try {
 			// We will try to use the system's native look and feel for UI
 			UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
-			
+			String a = null;
+			String b = null;
+			String e = null;
+			String fh = null;
+			String fa = null;
+			boolean enableGui = true;
+			boolean verbose = false;
 			for (int i = 0; i < args.length; i++) {
 				String arg = args[i];
 				if (arg.equals("-help")||arg.equals("-h")) {
@@ -90,8 +95,20 @@ class DeltaGene {
 							+ "Note: List only handles the -b input."
 							+ "-verbose: gives verbose output of the process");
 					return;
+				}if (arg.equals("-a")) {
+					
+				}if (arg.equals("-b")) {
+					// results with b input
+				}if (arg.equals("-e")) {
+					// export to arg[i+1]
+				}if (arg.equals("-fh")) {
+					
+				}if (arg.equals("-fa")) {
+					
 				}if (arg.equals("-nogui")) {
 					enableGui = false;
+				}if (arg.equals("-verbose")) {
+					verbose = true;
 				}
 			}
 			
@@ -104,8 +121,7 @@ class DeltaGene {
 				});
 			}else{
 				// TODO print command line output, export to file
-				//input dgi = new input();
-				
+				Input dgi = new Input(a, b, e, fh, fa, enableGui, verbose);
 			}
 		}catch (Exception e) {
 			e.printStackTrace();
