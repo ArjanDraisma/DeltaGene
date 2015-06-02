@@ -1,4 +1,4 @@
-package DeltaGene;
+package deltagene.utils;
 
 import java.awt.Button;
 import java.awt.Container;
@@ -81,7 +81,7 @@ public class Error implements ActionListener{
 		errframe.setVisible(true);
 	}
 	
-	Error(String errmsg, String errtitle, int consequence, Exception e) {
+	public Error(String errmsg, String errtitle, int consequence, Exception e) {
 		if (errmsg == CRIT_ERROR && errtitle == CRIT_ERROR_T) {
 			errmsg+=e.getStackTrace();
 		}
@@ -95,7 +95,7 @@ public class Error implements ActionListener{
 	 * @param errtitle the error title
 	 * @param consequence from WindowConstants
 	 */
-	Error(String errmsg, String errtitle, int consequence) {
+	public Error(String errmsg, String errtitle, int consequence) {
 		if (errmsg == CRIT_ERROR || errtitle == CRIT_ERROR_T) {
 			errmsg = DEV_ERROR;
 			errtitle = DEV_ERROR_T;

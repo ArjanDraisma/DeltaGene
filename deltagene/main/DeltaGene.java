@@ -34,7 +34,10 @@
  * your favorite website mocking bad code.
  */
 
-package DeltaGene;
+package deltagene.main;
+
+import deltagene.gui.MainGui;
+import deltagene.utils.Error;
 
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -47,9 +50,9 @@ import javax.swing.WindowConstants;
  * The main class for deltagene. Does little else besides set the 
  * look and feel of swing, parse command line arguments and create the gui
  */
-class DeltaGene {
+public class DeltaGene {
 	
-	public static Gui guiInstance;				// instance of the Gui class
+	public static MainGui gui;				// instance of the Gui class
 	// these constants are used throughout multiple classes
 	public final static int INPUTH = 126;	// Height of the input box
 	public final static int INFOH = 92;		// Height of the info box
@@ -114,14 +117,14 @@ class DeltaGene {
 			
 			if (enableGui) {
 				// Any updates to the UI must happen on the event dispatching thread
-				javax.swing.SwingUtilities.invokeAndWait(new Runnable() {
+				javax.swing.SwingUtilities.invokeLater(new Runnable() {
 					public void run() {
-						guiInstance = new Gui();
+						gui = new MainGui();
 					}
 				});
 			}else{
 				// TODO print command line output, export to file
-				Input dgi = new Input(a, b, e, fh, fa, enableGui, verbose);
+				//Input dgi = new Input(a, b, e, fh, fa, enableGui, verbose);
 			}
 		}catch (Exception e) {
 			e.printStackTrace();
