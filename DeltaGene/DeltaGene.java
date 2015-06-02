@@ -31,235 +31,105 @@
  * For more information, please refer to <http://unlicense.org/>
  * 
  * Of course, this also means that you are free to post any snippets on
- * your favorite website mocking bad code. I know I am not a professional
- * programmer. Know that this program was written with the best intentions.
+ * your favorite website mocking bad code.
  */
 
 package DeltaGene;
 
-import java.io.BufferedInputStream;
-import java.io.ByteArrayOutputStream;
-import java.io.File;
-import java.io.BufferedReader;
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.io.IOException;
-import java.io.FileWriter;
-import java.net.URL;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
-import javax.swing.JFrame;
 import javax.swing.UIManager;
+import javax.swing.WindowConstants;
 
-
+/**
+ * @author ArjanDraisma
+ * The main class for deltagene. Does little else besides set the 
+ * look and feel of swing, parse command line arguments and create the gui
+ */
 class DeltaGene {
-	private static Gui dggui;
-	private static File hpofile;
-	private static File assocfile;
-	private static File dir = new File(".\\HPO\\");
 	
-	public static File getHPOFile() {
-		return hpofile;
-	}
+	public static Gui guiInstance;				// instance of the Gui class
+	// these constants are used throughout multiple classes
+	public final static int INPUTH = 126;	// Height of the input box
+	public final static int INFOH = 92;		// Height of the info box
+	public final static int INPUTPAD = 10;	// padding between the inputbox and infobox
 	
-	public static File getAssocFile() {
-		return assocfile;
-	}
-	
-	/**
-	 * This function returns a string with the contents of an inputstream
-	 * 
-	 * @param in an inputstream with the text to be copied to a string
-	 * @return a string with the complete transcript from the inputstream
-	 * @throws IOException
-	 */
-	public static String convertStreamToString(InputStream in) 
-	    throws IOException {
-	    BufferedInputStream is = new BufferedInputStream(in);
-	    ByteArrayOutputStream buffer = new ByteArrayOutputStream();
-	    int result = is.read();
-	    while(result != -1) {
-	      byte b = (byte)result;
-	      buffer.write(b);
-	      result = is.read();
-	    }        
-	    in.close();
-	    return buffer.toString();
-	}
-	
-	private static boolean getLatestFiles() {
-		try {
-			File[] oldfiles;
-			String json;
-			String buffer;
-			URL jsonurl;
-			URL fileurl;
-			BufferedReader in;
-			InputStream istream;
-			FileWriter out;
-			/* 	Since we will be searching for the timestamp in filenames and text,
-			we will not be using a Long or Date variable. */
-			String timestamp;
-			long start, stop, time;
-			
-			start = System.currentTimeMillis();
-			// We inform the user that the application is downloading the HPO file
-			dggui.setUpdateLabelText("Downloading HPO file, please wait...");
-			
-			// This URL points to the JSON file used to retrieve the timestamp
-			jsonurl = new URL("http://compbio.charite.de/"
-					+ "hudson/job/hpo/lastStableBuild/api/json");
-			
-			// convertStreamToString loads the JSON in a string.
-			// the JSON file is ~1100 characters long.
-			json = convertStreamToString(jsonurl.openStream());
-			int tsindex = json.indexOf("timestamp\":")+"timestamp\":".length();
-			timestamp = json.substring(tsindex,  json.indexOf(",\"url"));
-			
-			// check if HPO folder exists
-			if (!dir.exists()) {
-				// If not, Try to create the HPO directory in the applets' folder
-				if (!dir.mkdir()) {
-					// show error to user in case something goes wrong. Should not happen.
-					new Error("Could not make HPO files directory.\n"
-							+ "Try launching the application as administrator.", 
-							"IO Error",
-							JFrame.EXIT_ON_CLOSE);
-					return false;
-				}
-			}
-			hpofile = new File(".\\HPO\\"+timestamp+".obo");
-			
-			// check if HPO file with this timestamp already exists
-			if (!hpofile.exists()) {
-				/* 
-				 * dggui.down contains the number of bytes that have been downloaded
-				 * and will be displayed on the applet when it is downloading the files,
-				 * to indicate some progress is being made.
-				 */
-				dggui.down = 0;
-				
-				// oldhpo will contain the filenames for all files in the HPO directory 
-				oldfiles = dir.listFiles();
-				
-				for (File file : oldfiles) {
-					if (file.getName().endsWith(".obo")) 
-						if (!file.getName().startsWith(timestamp))
-							file.delete();
-				}
-				
-				// Create the file if it does not exist
-				hpofile.createNewFile();
-				
-				/* 
-				 * From here, the method will download the HPO number database from
-				 * the file pointed to by 'hpourl' and put it in 'hpofile'
-				 */
-				fileurl = new URL("http://compbio.charite.de/hudson/job/"
-						+ "hpo/lastStableBuild/artifact/hp/hp.obo");
-				out = new FileWriter(hpofile);
-				istream =	fileurl.openConnection().getInputStream(); 
-				in = new BufferedReader(new InputStreamReader(istream));
-				while ((buffer = in.readLine()) != null) { 
-					out.write(buffer+"\n");
-					dggui.down += buffer.length();
-				}
-				out.close();
-			}
-			stop = System.currentTimeMillis();
-			time = stop - start;
-			System.out.println("(Down)loading the HPO file took "+time+" millis");
-			
-			start = System.currentTimeMillis();
-			dggui.setUpdateLabelText("Downloading association files. "
-					+ "Please wait...");
-			
-			jsonurl = new URL("http://compbio.charite.de/hudson/"
-					+ "job/hpo.annotations.monthly/lastStableBuild/api/json");
-			json = convertStreamToString(jsonurl.openStream());
-			tsindex = json.indexOf("timestamp\":")+"timestamp\":".length();
-			timestamp = json.substring(tsindex, json.indexOf(",\"url"));
-			
-			assocfile = new File(".\\HPO\\"+timestamp+".assoc");
-			
-			// check if HPO file with this timestamp already exists
-			if (!assocfile.exists()) {
-				/* 
-				 * dggui.down contains the number of bytes that have been downloaded
-				 * and will be displayed on the applet when it is downloading the files,
-				 * to indicate some progress is being made.
-				 */
-				dggui.down = 0;
-				
-				// oldfiles will contain the filenames for all files in the HPO directory 
-				oldfiles = dir.listFiles();
-				
-				for (File file : oldfiles) {
-					if (file.getName().endsWith(".assoc")) 
-						if (!file.getName().startsWith(timestamp))
-							file.delete();
-				}
-				
-				// Create the file if it does not exist
-
-				assocfile.createNewFile();
-				fileurl = new URL("http://compbio.charite.de/hudson/job/"
-						+ "hpo.annotations.monthly/lastStableBuild/artifact/"
-						+ "annotation/ALL_SOURCES_ALL_FREQUENCIES_"
-						+ "diseases_to_genes_to_phenotypes.txt");
-				out = new FileWriter(assocfile);
-				istream = fileurl.openConnection().getInputStream(); 
-				in = new BufferedReader(
-						new InputStreamReader(istream));
-				while ((buffer = in.readLine()) != null) { 
-					out.write(buffer+"\n");
-					dggui.down += buffer.length();
-				}
-				dggui.downloading = false;
-				out.close();
-			}
-			stop = System.currentTimeMillis();
-			time = stop - start;
-			System.out.println("(Down)loading association files took "+time+"millis");
-			return true;	
-		}catch (IOException e){
-			e.printStackTrace();
-			return false;
-		}
-	}
+	public final static ExecutorService THREADPOOL = Executors.newFixedThreadPool(5);
+	// in case of command line mode, we do not enable the gui
 	
 	public static void main(String[] args) {
 		try {
 			// We will try to use the system's native look and feel for UI
 			UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
-			
-			// Any updates to the UI must happen on the event dispatching thread.
-			javax.swing.SwingUtilities.invokeAndWait(new Runnable() {
-				public void run() {
-					dggui = new Gui();
-					dggui.createAndShowGUI();
+			String a = null;
+			String b = null;
+			String e = null;
+			String fh = null;
+			String fa = null;
+			boolean enableGui = true;
+			boolean verbose = false;
+			for (int i = 0; i < args.length; i++) {
+				String arg = args[i];
+				if (arg.equals("-help")||arg.equals("-h")) {
+					System.out.println("DeltaGene is a simple program that"
+							+ "compares a list of genes against a multitude"
+							+ "of lists. Includes a connection to the Human"
+							+ "Phenotype Ontology database.\n\n"
+							+ "Usage: java -jar DeltaGene -a [\"input\"] "
+							+ "-b [\"input\",\"input\"] "
+							+ "-e <output path> -fh <hpo file path> "
+							+ "-fa <association file path> -nogui -verbose\n\n"
+							+ "input can be:"
+							+ "HPO number(s): [HP:0000021,HP:0000012]\n"
+							+ "Plain number(s): [12] for HP:0000012\n"
+							+ "(list of) gene(s): [TTN,DSP]\n\n"
+							+ "Options:\n"
+							+ "-a: the A group input (singular) "
+							+ "-export: Export a comma-seperated file with"
+							+ "results to the specified location. implies "
+							+ "-nogui\n"
+							+ "-h, -help: Display this help text\n"
+							+ "-nogui: disble gui display\n"
+							+ "-op: operator. Can be DEFAULT,AND,NOT,XOR and LIST "
+							+ "Note: List only handles the -b input."
+							+ "-verbose: gives verbose output of the process");
+					return;
+				}if (arg.equals("-a")) {
+					
+				}if (arg.equals("-b")) {
+					// results with b input
+				}if (arg.equals("-e")) {
+					// export to arg[i+1]
+				}if (arg.equals("-fh")) {
+					
+				}if (arg.equals("-fa")) {
+					
+				}if (arg.equals("-nogui")) {
+					enableGui = false;
+				}if (arg.equals("-verbose")) {
+					verbose = true;
 				}
-			});
+			}
 			
-			// The applet will try to use an older version of the association file if it is available.
-			getLatestFiles();
-			dggui.updateGUI(hpofile, assocfile);
+			if (enableGui) {
+				// Any updates to the UI must happen on the event dispatching thread
+				javax.swing.SwingUtilities.invokeAndWait(new Runnable() {
+					public void run() {
+						guiInstance = new Gui();
+					}
+				});
+			}else{
+				// TODO print command line output, export to file
+				Input dgi = new Input(a, b, e, fh, fa, enableGui, verbose);
+			}
 		}catch (Exception e) {
 			e.printStackTrace();
-			System.exit(0);
+			/* Something went terribly wrong if this ever occurs. 
+			 * Could happen when something interrupts invokeAndWait above,
+			 * is not expected to ever happen.
+			 */
+			new Error(Error.UNDEF_ERROR,Error.UNDEF_ERROR_T, WindowConstants.EXIT_ON_CLOSE);
 		}
-	}
-	/** getLastAssocFile will try to load the last assoc file that is still in
-	 * the /HPO/ directory.
-	 */
-	private static void getLastAssocFile() {
-		// TODO Auto-generated method stub
-		
-	}
-	/** getLastAssocFile will try to load the last HPO (.obo) file that is still 
-	 * in the /HPO/ directory.
-	 */
-	private static void getLastHPOFile() {
-		// TODO Auto-generated method stub
-		
 	}
 }

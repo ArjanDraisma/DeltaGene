@@ -34,6 +34,7 @@
 package DeltaGene;
 
 import java.awt.Color;
+import java.awt.Component;
 import java.awt.Container;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
@@ -48,27 +49,40 @@ import java.awt.event.KeyEvent;
 import java.awt.event.KeyListener;
 import java.awt.event.MouseEvent;
 import java.awt.event.MouseListener;
+import java.io.BufferedInputStream;
 import java.io.BufferedReader;
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.net.URL;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Map.Entry;
+import java.util.Hashtable;
+import java.util.Stack;
+import java.util.TreeMap;
+import java.util.concurrent.Callable;
+import java.util.concurrent.Future;
 
 import javax.swing.event.DocumentListener;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.HyperlinkEvent;
 import javax.swing.event.HyperlinkListener;
+import javax.swing.event.TreeModelListener;
+import javax.swing.plaf.TreeUI;
 import javax.swing.text.Document;
 import javax.swing.tree.DefaultMutableTreeNode;
 import javax.swing.tree.DefaultTreeCellRenderer;
+import javax.swing.tree.ExpandVetoException;
+import javax.swing.tree.TreeModel;
+import javax.swing.tree.TreeNode;
 import javax.swing.tree.TreePath;
-import javax.swing.Icon;
 import javax.swing.JButton;
 import javax.swing.JEditorPane;
 import javax.swing.JFileChooser;
@@ -85,20 +99,474 @@ import javax.swing.JTable;
 import javax.swing.JTextArea;
 import javax.swing.JTextField;
 import javax.swing.JTree;
+import javax.swing.ScrollPaneConstants;
+import javax.swing.SwingUtilities;
+import javax.swing.SwingWorker;
 import javax.swing.UIManager;
-
-//import DeltaGene.input.Browser.HPOTree;
+import javax.swing.WindowConstants;
 
 /**
- * This class handles input from the user, generating headers and generating results.
+ * This class handles input from the user, generating headers and generating 
+ * results.
+ * @author ArjanDraisma
+ * 
  */
-class input extends Gui {
+class Input {
+	class Autocomplete implements DocumentListener, ActionListener {
+		/**
+		 * @author ArjanDraisma
+		 * acWindow implements a custom version of show, tailored to the
+		 * amount of autocomplete items that have been found.
+		 */
+		class AutocompleteWindow extends JPopupMenu {
+			private static final long serialVersionUID = 1L;
+			public void show(int num) {
+				setPreferredSize(new Dimension(acInvoker.getSize().width,
+						num*22));
+				setLocation(acInvoker.getInputBoxLocationOnScreen().x,
+						acInvoker.getInputBoxLocationOnScreen().y
+						+ acInvoker.getSize().height);
+				pack();
+				revalidate();
+				repaint();
+				if (!isVisible()) {
+					setVisible(true);
+				}	
+			}
+		}
+		
+		class keyHandler implements KeyListener, FocusListener {
+			@Override
+			public void focusGained(FocusEvent e) {
+				if (acInvoker == null||!e.getComponent().equals(
+						acInvoker.getInputBox())) {
+					acInvoker = getInputboxObject((JTextArea)e.getSource());
+					acDropdownBox.setInvoker(acInvoker.getInputBox());
+				}
+			}
+			
+			@Override
+			public void focusLost(FocusEvent arg0) {
+			}
+			
+
+			private void highlightselection (int index) {
+				for (int i = 0; i < acDropdownBox.getComponentCount(); i++) {
+					if (i == index) {
+						acDropdownBox.getComponent(i).setBackground(
+								UIManager.getColor(
+										"MenuItem.selectionBackground"));
+						acDropdownBox.getComponent(i).setForeground(
+								UIManager.getColor(
+										"MenuItem.selectionForeground"));
+					}else{
+						acDropdownBox.getComponent(i).setBackground(
+								UIManager.getColor(
+										"MenuItem.background"));
+						acDropdownBox.getComponent(i).setForeground(
+								UIManager.getColor(
+										"MenuItem.foreground"));
+					}
+				}
+			}
+			
+			@Override
+			public void keyPressed(KeyEvent e) {
+				int key = e.getKeyCode();
+				if ((key == KeyEvent.VK_DOWN||key == KeyEvent.VK_UP||key == KeyEvent.VK_ENTER)&&acDropdownBox.isVisible()) {
+					e.consume();
+				}
+			}
+
+			@Override
+			public void keyReleased(KeyEvent e) {
+				int key = e.getKeyCode();
+				int index = acDropdownBox.getSelectionModel().getSelectedIndex();
+				if (key == KeyEvent.VK_DOWN&&acDropdownBox.isVisible()) {
+					if (index+1>acDropdownBox.getComponentCount()-1) {
+						acDropdownBox.getSelectionModel().setSelectedIndex(0);
+					}else{
+						acDropdownBox.getSelectionModel().setSelectedIndex(index+1);
+					}
+				}
+				if (key == KeyEvent.VK_UP&&acDropdownBox.isVisible()) {
+					if (index-1<0) {
+						acDropdownBox.getSelectionModel().setSelectedIndex(acDropdownBox.getComponentCount()-1);
+					}else{
+						acDropdownBox.getSelectionModel().setSelectedIndex(index-1);
+					}
+				}
+				highlightselection(acDropdownBox.getSelectionModel().getSelectedIndex());
+				if (key == KeyEvent.VK_ENTER&&acDropdownBox.isVisible()) {
+					if (index > -1) {
+						ActionEvent ae = new ActionEvent(acDropdownBox.getComponent(index), ActionEvent.ACTION_PERFORMED, ((JMenuItem)acDropdownBox.getComponent(index)).getActionCommand());
+						actionPerformed(ae);
+						acDropdownBox.setVisible(false);
+					}
+				}
+				if (key == KeyEvent.VK_ESCAPE&&acDropdownBox.isVisible()) {
+					acDropdownBox.setVisible(false);
+				}
+			}
+
+			@Override
+			public void keyTyped(KeyEvent e) {
+			}
+		}
+		
+		AutocompleteWindow acDropdownBox;
+		keyHandler keyHandlerInstance;
+		
+		userinput acInvoker;
+		Future<TreeMap<String, String>> futureACList;
+		TreeMap<String,String> ACList;
+		
+		Autocomplete (Future<TreeMap<String,String>> futureAcKeywordList) {
+			futureACList = futureAcKeywordList;
+			keyHandlerInstance = new keyHandler();
+			acDropdownBox = new AutocompleteWindow();
+			acDropdownBox.addFocusListener(keyHandlerInstance);
+			acDropdownBox.setVisible(false);
+		}
+		
+		@Override
+		public void actionPerformed(ActionEvent e) {
+			String hpo = e.getActionCommand();
+			((JTextArea)acDropdownBox.getInvoker()).setText(hpo);
+		}
+		
+		public void add (userinput input) {
+			input.getDocument().addDocumentListener(this);
+			input.getInputBox().addFocusListener(keyHandlerInstance);
+			input.getInputBox().addKeyListener(keyHandlerInstance);
+		}
+		
+		// changedupdate is not used on plainDocuments, as used by
+		// JTextArea
+		@Override
+		public void changedUpdate(DocumentEvent e) {}
+		
+		@Override
+		public void insertUpdate (DocumentEvent e) {
+			int length;
+			String s;
+			String hpo;
+			Document invokerDocument;
+			JMenuItem acListItem;
+			int num = 0;
+			long timeOut = System.currentTimeMillis()+5000;
+			
+			invokerDocument = acInvoker.getDocument();
+			acInvoker.getInputBox().setComponentPopupMenu(acDropdownBox);
+			acDropdownBox.removeAll();
+			acDropdownBox.setInvoker(acInvoker.getInputBox());
+			length = invokerDocument.getLength();
+			if (length > 2) {
+				/* Checks if ACList is not null, the DocumentEvent is not
+				 * null, or whether the future ACList is done.
+				 * If the ACList is not null, the data is already available
+				 * for the dropdown menu.
+				 * 
+				 * If the DocumentEvent is null, this event was fired
+				 * manually. This occurs when the dropdown is visible when
+				 * the futureAC is about to be ready.
+				 * 
+				 * If futureACList is done, we can populate ACList.
+				 */
+				if (ACList != null || e == null || futureACList.isDone()) {
+					/* If ACList == null it still needs to be gotten from
+					 * the future object
+					 */
+					if (ACList == null) {
+						/* we will wait for ~5 seconds to get the ACList
+						 * when this event fires and the future object
+						 * is not done. This should only be relevant
+						 * when the event is forced to fire just before
+						 * the future object is done.
+						 */
+						while (!futureACList.isDone()) {
+							if (timeOut < System.currentTimeMillis()) {
+								acDropdownBox.setVisible(false);
+								return;
+							}
+						}
+						try {
+							// Retrieve the actual ACList
+							ACList = futureACList.get();
+							//Collections.sort
+						}catch (Exception exception) {
+							/* Something will have gone horribly wrong
+							 * if this exception is ever reached.
+							 */
+							exception.printStackTrace();
+						}
+					}
+					s = acInvoker.getInputText();
+					if (acInvoker.getInputType() == 0) {
+						for (String search : ACList.keySet()) {
+							if (search.toLowerCase().contains(s.toLowerCase())&&num<10) {
+								hpo = ACList.get(search);
+								acListItem = new JMenuItem(search+" ("+hpo+")");
+								acListItem.setComponentPopupMenu(acDropdownBox);
+								acListItem.addActionListener(this);
+								acListItem.addKeyListener(keyHandlerInstance);
+								acListItem.setActionCommand(hpo);
+								acListItem.setEnabled(true);
+								acListItem.setOpaque(true);
+								acDropdownBox.add(acListItem);
+								num++;
+							}
+						}
+						acDropdownBox.show(num);
+						acInvoker.getInputBox().requestFocusInWindow();
+					}
+				}else{
+					acDropdownBox.add(new JMenuItem("Please wait..."));
+					acDropdownBox.show(3);
+					acInvoker.getInputBox().requestFocusInWindow();
+				}
+			}else{
+				acDropdownBox.setVisible(false);
+			}
+		}
+
+		@Override
+		public void removeUpdate (DocumentEvent e) {
+			if (e.getLength() == e.getDocument().getLength()) {
+				return;
+			}else{
+				insertUpdate(e);
+			}
+		}
+
+		public boolean isVisible() {
+			return acDropdownBox.isVisible();
+		}
+	}
 	
+	class HPOFile {
+		private File hpoFile;
+		private File associationFile;
+		private File directory = new File(".\\HPO\\");
+		private int downloaded = 0;
+		public final int STATE_FAIL = -1;
+		public final int STATE_INIT = 0;
+		public final int STATE_DOWNLOAD_HPO = 1;
+		public final int STATE_DOWNLOAD_ASSOC = 2;
+		public final int STATE_READY = 3;
+		private int state;
+		
+		
+		HPOFile() {
+			state = STATE_INIT;
+		}
+		
+		public void LoadFiles() {
+			try {
+				File[] oldfiles;
+				String json;
+				String buffer;
+				URL jsonurl;
+				URL fileurl;
+				BufferedReader in;
+				InputStream istream;
+				FileWriter out;
+				/* 	Since we will be searching for the timestamp in filenames and text,
+				we will not be using a Long or Date variable. */
+				String timestamp;
+				long start, stop, time;
+				
+				start = System.currentTimeMillis();
+				
+				// This URL points to the JSON file used to retrieve the timestamp
+				jsonurl = new URL("http://compbio.charite.de/"
+						+ "hudson/job/hpo/lastStableBuild/api/json");
+				
+				// convertStreamToString loads the JSON in a string.
+				// the JSON file is ~1100 characters long.
+				json = convertStreamToString(jsonurl.openStream());
+				int tsindex = json.indexOf("timestamp\":")+"timestamp\":".length();
+				timestamp = json.substring(tsindex,  json.indexOf(",\"url"));
+				
+				// check if HPO folder exists
+				if (!directory.exists()) {
+					// If not, Try to create the HPO directory in the applets' folder
+					if (!directory.mkdir()) {
+						// show error to user in case something goes wrong. Should not happen.
+						new Error("Could not make HPO files directory.\n"
+								+ "Try launching the application as administrator.", 
+								"IO Error",
+								JFrame.EXIT_ON_CLOSE);
+						return;
+					}
+				}
+				hpoFile = new File(".\\HPO\\override.obo");
+				
+				// check if override HPO file exists
+				if (!hpoFile.exists()) {
+					hpoFile = new File(".\\HPO\\"+timestamp+".obo");
+					// check if HPO file with this timestamp already exists
+					if (!hpoFile.exists()) {
+						state = STATE_DOWNLOAD_HPO;
+						// oldhpo will contain the filenames for all files in the HPO directory 
+						oldfiles = directory.listFiles();
+						
+						for (File file : oldfiles) {
+							if (file.getName().endsWith(".obo")) 
+								if (!file.getName().startsWith(timestamp))
+									file.delete();
+						}
+						
+						// Create the file if it does not exist
+						hpoFile.createNewFile();
+						
+						/* 
+						 * From here, the method will download the HPO number database from
+						 * the file pointed to by 'hpourl' and put it in 'hpofile'
+						 */
+						fileurl = new URL("http://compbio.charite.de/hudson/job/"
+								+ "hpo/lastStableBuild/artifact/hp/hp.obo");
+						out = new FileWriter(hpoFile);
+						istream =	fileurl.openConnection().getInputStream(); 
+						in = new BufferedReader(new InputStreamReader(istream));
+						while ((buffer = in.readLine()) != null) { 
+							out.write(buffer+"\n");
+							downloaded += buffer.length();
+						}
+						out.close();
+					}
+				}
+				stop = System.currentTimeMillis();
+				time = stop - start;
+				System.out.println("(Down)loading the HPO file took "+time+" millis");
+				
+				start = System.currentTimeMillis();
+				
+				jsonurl = new URL("http://compbio.charite.de/hudson/"
+						+ "job/hpo.annotations.monthly/lastStableBuild/api/json");
+				json = convertStreamToString(jsonurl.openStream());
+				tsindex = json.indexOf("timestamp\":")+"timestamp\":".length();
+				timestamp = json.substring(tsindex, json.indexOf(",\"url"));
+				
+				associationFile = new File(".\\HPO\\override.assoc");
+				
+				// check if override association file exists
+				if (!associationFile.exists()) {
+					// check if association file with this timestamp already exists
+					associationFile = new File(".\\HPO\\"+timestamp+".assoc");
+					if (!associationFile.exists()) {
+						state = STATE_DOWNLOAD_ASSOC;
+						/* 
+						 * dggui.down contains the number of bytes that have been downloaded
+						 * and will be displayed on the applet when it is downloading the files,
+						 * to indicate some progress is being made.
+						 */
+						downloaded = 0;
+						
+						// oldfiles will contain the filenames for all files in the HPO directory 
+						oldfiles = directory.listFiles();
+						
+						for (File file : oldfiles) {
+							if (file.getName().endsWith(".assoc")) 
+								if (!file.getName().startsWith(timestamp))
+									file.delete();
+						}
+						
+						// Create the file if it does not exist
+		
+						associationFile.createNewFile();
+						fileurl = new URL("http://compbio.charite.de/hudson/job/"
+								+ "hpo.annotations.monthly/lastStableBuild/artifact/"
+								+ "annotation/ALL_SOURCES_ALL_FREQUENCIES_"
+								+ "diseases_to_genes_to_phenotypes.txt");
+						out = new FileWriter(associationFile);
+						istream = fileurl.openConnection().getInputStream(); 
+						in = new BufferedReader(
+								new InputStreamReader(istream));
+						while ((buffer = in.readLine()) != null) { 
+							out.write(buffer+"\n");
+							downloaded += buffer.length();
+						}
+						out.close();
+					}
+					stop = System.currentTimeMillis();
+					time = stop - start;
+					System.out.println("(Down)loading association files took "+time+"millis");
+				}
+				state = STATE_READY;
+				return;
+			}catch (IOException e){
+				state = STATE_FAIL;
+				e.printStackTrace();
+				new Error(Error.UNDEF_ERROR, Error.UNDEF_ERROR_T,
+						WindowConstants.EXIT_ON_CLOSE);
+			}
+		}
+		
+		/**
+		 * This function returns a string with the contents of an inputstream
+		 * 
+		 * @param in an inputstream with the text to be copied to a string
+		 * @return a string with the complete transcript from the inputstream
+		 * @throws IOException
+		 */
+		public String convertStreamToString(InputStream in) 
+		    throws IOException {
+		    BufferedInputStream is = new BufferedInputStream(in);
+		    ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+		    int result = is.read();
+		    while(result != -1) {
+		      byte b = (byte)result;
+		      buffer.write(b);
+		      result = is.read();
+		    }        
+		    in.close();
+		    return buffer.toString();
+		}
+		
+		public File getAssocFile() {
+			return associationFile;
+		}
+		
+		public int getDown() {
+			return downloaded;
+		}
+		
+		public File getHPOFile() {
+			return hpoFile;
+		}
+		
+		/**
+		 * returns the state of the HPOFILES object as an int
+		 * @return
+		 * <OL start=-1>
+		 * <LI>FAIL</LI>
+		 * <LI>INIT</LI>
+		 * <LI>DOWNLOAD_HPO</LI>
+		 * <LI>DOWNLOAD_ASSOC</LI>
+		 * <LI>READY</LI>
+		 * </OL>
+		 * @return
+		 */
+		public int getState() {
+			return state;
+		}
+		
+		public boolean isReady () {
+			return state == STATE_READY;
+		}
+	}
+	
+	/**
+	 * This class handles the autocompletion for the textareas
+	 */
+	
+
 	/**
 	 * The HPOObject subclass contains many methods related to looking up sets of HPONumbers,
 	 * and contains the HPONumber collection and the HPONumbers class itself.
 	 */
-	static class HPOObject {
+	static class HPOObject implements TreeModel {
 		class Browser implements KeyListener, 
 		MouseListener, ActionListener {
 			/**
@@ -109,238 +577,311 @@ class input extends Gui {
 			class HPOTree extends JTree {
 				private static final long serialVersionUID = 1L;
 
+		        Stack<Stack<TreePath>> expandedStack = new Stack<Stack<TreePath>>();
+		        Hashtable<TreePath, Boolean> expandedState = new Hashtable<TreePath, Boolean>();
+		        private static final int TEMP_STACK_SIZE = 11;
+
+		        
 				/**
 				 * @param node the root node
 				 */
-				HPOTree(DefaultMutableTreeNode node) {
+				HPOTree(TreeNode node) {
 					super(node);
-					DefaultTreeCellRenderer renderer = new DefaultTreeCellRenderer() {
-						private static final long serialVersionUID = -5119614872016462922L;
-						
-					};
-					Icon hpoicon = null;
-					renderer.setLeafIcon(hpoicon);
-					renderer.setClosedIcon(hpoicon);
-					renderer.setOpenIcon(hpoicon);
-					
+					DefaultTreeCellRenderer customRenderer = 
+							new DefaultTreeCellRenderer() {
+							
+							private static final long serialVersionUID = 2L;
+
+							public Component getTreeCellRendererComponent(
+									JTree tree, Object value, boolean sel,
+									boolean expanded, boolean leaf, int row,
+									boolean hasFocus) {
+								if ((value != null) && value instanceof TreeNode) {
+									HPONumber hpoNode = (HPONumber)value;
+									this.setText(hpoNode.hpo()
+											+" - "+hpoNode.phenotype());
+									this.selected = sel;
+									if (sel) {
+										super.setBackground(getBackgroundSelectionColor());
+										setForeground(this.getTextSelectionColor());
+									}else{
+										super.setBackground(getBackgroundNonSelectionColor());
+										setForeground(this.getTextNonSelectionColor());
+									}
+									return this;
+								}
+								return new JLabel("null");
+							}
+						};
+						this.setCellRenderer(customRenderer);
 				}
-				
+
 				/**
-				 * Custom function to expand selected paths.
-				 * The only reason This function is used instead of Jtree's
-				 * native functions is that this is faster. Native methods
-				 * processing time increases exponentially with the amount
-				 * of elements to expand.
+				 * For some reason, having this here makes expanding
+				 * a lot of nodes a lot faster as opposed to using JTree's
+				 * native setExpandedState
 				 */
-				public void expandPaths () {
+				@Override
+				protected void setExpandedState(TreePath path, boolean state) {
+				    if(path != null) {
+			            // Make sure all parents of path are expanded.
+			            Stack<TreePath>         stack;
+			            TreePath      parentPath = path.getParentPath();
+
+			            if (expandedStack.size() == 0) {
+			                stack = new Stack<TreePath>();
+			            }
+			            else {
+			                stack = (Stack<TreePath>)expandedStack.pop();
+			            }
+
+			            try {
+			                while(parentPath != null) {
+			                    if(isExpanded(parentPath)) {
+			                        parentPath = null;
+			                    }
+			                    else {
+			                        stack.push(parentPath);
+			                        parentPath = parentPath.getParentPath();
+			                    }
+			                }
+			                for(int counter = stack.size() - 1; counter >= 0; counter--) {
+			                    parentPath = (TreePath)stack.pop();
+			                    if(!isExpanded(parentPath)) {
+			                        try {
+			                            fireTreeWillExpand(parentPath);
+			                        } catch (ExpandVetoException eve) {
+			                            // Expand vetoed!
+			                            return;
+			                        }
+			                        expandedState.put(parentPath, Boolean.TRUE);
+			                        fireTreeExpanded(parentPath);
+			                        if (accessibleContext != null) {
+			                            ((AccessibleJTree)accessibleContext).
+			                                              fireVisibleDataPropertyChange();
+			                        }
+			                    }
+			                }
+			            }
+			            finally {
+			                if (expandedStack.size() < TEMP_STACK_SIZE) {
+			                    stack.removeAllElements();
+			                    expandedStack.push(stack);
+			                }
+			            }
+			            if(!state) {
+			                // collapse last path.
+			                Object          cValue = expandedState.get(path);
+
+			                if(cValue != null && ((Boolean)cValue).booleanValue()) {
+			                    try {
+			                        fireTreeWillCollapse(path);
+			                    }
+			                    catch (ExpandVetoException eve) {
+			                        return;
+			                    }
+			                    expandedState.put(path, Boolean.FALSE);
+			                    fireTreeCollapsed(path);
+			                    if (removeDescendantSelectedPaths(path, false) &&
+			                        !isPathSelected(path)) {
+			                        // A descendant was selected, select the parent.
+			                        addSelectionPath(path);
+			                    }
+			                    if (accessibleContext != null) {
+			                        ((AccessibleJTree)accessibleContext).
+			                                    fireVisibleDataPropertyChange();
+			                    }
+			                }
+			            }
+			            else {
+			                // Expand last path.
+			                Object          cValue = expandedState.get(path);
+
+			                if(cValue == null || !((Boolean)cValue).booleanValue()) {
+			                    try {
+			                        fireTreeWillExpand(path);
+			                    }
+			                    catch (ExpandVetoException eve) {
+			                        return;
+			                    }
+			                    expandedState.put(path, Boolean.TRUE);
+			                    fireTreeExpanded(path);
+			                    if (accessibleContext != null) {
+			                        ((AccessibleJTree)accessibleContext).
+			                                          fireVisibleDataPropertyChange();
+			                    }
+			                }
+			            }
+			        }
+			    }
+
+				
+				
+				@Override
+				public void expandPath(TreePath path) {
+					TreeModel  model = getModel();
 					
-				}
-				
-				/**
-				 * Collapses all nodes.
-				 */
-				public void collapseAll() {
-					for (int i = this.getRowCount()-1; i > 0; i--) {
-						this.collapseRow(i);
+					if(path != null && model != null &&
+						!model.isLeaf(path.getLastPathComponent())
+						&& !isExpanded(path)) {
+						setExpandedState(path, true);
 					}
 				}
 				
-				/**
-				 * Expands all nodes
-				 */
-				public void expandAll() {
-					for (int i = this.getRowCount()-1; i > 0; i--) {
-						this.expandRow(i);
-					}
-				}
+				public void expandAll(JTree tree, boolean expand) {
+			        TreeNode root = (TreeNode)tree.getModel().getRoot();
+			        if (root!=null) {
+			            // Traverse tree from root
+			            expandAll(tree, new TreePath(root), expand);
+			        }
+			    }
+
+			    /**
+			     * @return Whether an expandPath was called for the last node in the parent path
+			     */
+			    private boolean expandAll(JTree tree, TreePath parent, boolean expand) {
+	            	TreeUI ui = this.getUI();
+	            	this.setUI(null);
+			        // Traverse children
+			        TreeNode node = (TreeNode)parent.getLastPathComponent();
+			        if (node.getChildCount() > 0) {
+			            boolean childExpandCalled = false;
+			            for (Enumeration<?> e = node.children(); e.hasMoreElements(); ) {
+			                TreeNode n = (TreeNode)e.nextElement();
+			                TreePath path = parent.pathByAddingChild(n);
+			                childExpandCalled = expandAll(tree, path, expand) || childExpandCalled; // the OR order is important here, don't let childExpand first. func calls will be optimized out !
+			            }
+
+			            if (!childExpandCalled) { // only if one of the children hasn't called already expand
+			                // Expansion or collapse must be done bottom-up, BUT only for non-leaf nodes
+			                if (expand) {
+			                    tree.expandPath(parent);
+			                } else {
+			                    tree.collapsePath(parent);
+			                }
+			            }
+		                this.setUI(ui);
+			            return true;
+			        } else {
+			            return false;
+			        }
+			    }
 			}
 			
-			private DefaultMutableTreeNode root = 
-					new DefaultMutableTreeNode("Human Phenotype Ontology");
-			private JFrame bwindow;
-			private JPanel content;
-			private HPOTree tree;
-			private JPopupMenu treemenu;
-			private JScrollPane jsp;
-			private JPanel controls;
+			//private DefaultMutableTreeNode rootNode = new DefaultMutableTreeNode("Human Phenotype Ontology");
+			//private DefaultMutableTreeNode HPOTree;
+			private JFrame browserWindow;
+			private JPanel browserContentPanel;
+			private HPOTree hpoBrowserTree;
+			private JPopupMenu browserMenu;
+			final private JScrollPane treeScrollPane;
+			private JPanel browserControlPanel;
 			private JLabel searchlabel;
-			private JTextField search;
-			private JButton searchbutton;
-			private JButton listbutton;
-			private JMenuItem treelistbtn;
-			private JButton addbutton;
+			private JTextField searchField;
+			private JButton searchButton;
+			private JButton listButton;
+			private JMenuItem treeListButton;
+			private JButton addButton;
+			private int state;
+			public final static int STATE_INIT = 0;
+			public final static int STATE_READY = 1;
 			
-			Browser (HPOObject hpodata) {
-				bwindow = new JFrame("HPO Browser");
-				controls = new JPanel();
-				content = new JPanel();
-				jsp = new JScrollPane();
+			Browser (final HPOObject hpodata) {
+				
+				state = STATE_INIT;
+				browserWindow = new JFrame("HPO Browser");
+				browserControlPanel = new JPanel();
+				browserContentPanel = new JPanel();
+				treeScrollPane = new JScrollPane();
 				searchlabel = new JLabel("Search:");
-				search = new JTextField();
-				searchbutton = new JButton("Find");
-				listbutton = new JButton("List genes");
-				addbutton = new JButton("Add to input");
-				tree = new HPOTree(root);
+				searchField = new JTextField();
+				searchButton = new JButton("Find");
+				listButton = new JButton("List genes");
+				addButton = new JButton("Add to input");
+				final JLabel waitlabel = new JLabel("Please wait until the HPO database"
+						+ "has finished loading...");
+				hpoBrowserTree = new HPOTree((HPONumber)hpodata.getRoot());
+				final GridBagConstraints c = new GridBagConstraints();
 				
-				GridBagConstraints c = new GridBagConstraints();
+				browserWindow.setPreferredSize(new Dimension(700,600));
+				browserWindow.setDefaultCloseOperation(WindowConstants.DISPOSE_ON_CLOSE);
+				browserWindow.setLayout(new GridBagLayout());
 				
-				bwindow.setPreferredSize(new Dimension(700,600));
-				bwindow.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
-				bwindow.setLayout(new GridBagLayout());
+				searchField.addKeyListener(this);
+				browserControlPanel.setLayout(new FlowLayout());
+				browserControlPanel.add(searchlabel);
+				searchField.setPreferredSize(new Dimension(80, 20));
+				browserControlPanel.add(searchField);
+				searchButton.addActionListener(this);
+				searchButton.addKeyListener(this);
+				searchButton.setActionCommand("search");
+				browserControlPanel.add(searchButton);
+				listButton.addActionListener(this);
+				listButton.setActionCommand("list");
+				browserControlPanel.add(listButton);
+				addButton.setEnabled(false);
+				browserControlPanel.add(addButton);
+				browserControlPanel.setMaximumSize(new Dimension(browserWindow.getWidth(), 30));
 				
-				search.addKeyListener(this);
-				controls.setLayout(new FlowLayout());
-				controls.add(searchlabel);
-				search.setPreferredSize(new Dimension(80, 20));
-				controls.add(search);
-				searchbutton.addActionListener(this);
-				searchbutton.addKeyListener(this);
-				searchbutton.setActionCommand("search");
-				controls.add(searchbutton);
-				listbutton.addActionListener(this);
-				listbutton.setActionCommand("list");
-				controls.add(listbutton);
-				addbutton.setEnabled(false);
-				controls.add(addbutton);
-				controls.setMaximumSize(new Dimension(bwindow.getWidth(), 30));
-				
-				content.setLayout(new GridBagLayout());
+				browserContentPanel.setLayout(new GridBagLayout());
 				c.fill = GridBagConstraints.BOTH;
 				c.weightx = 1; c.weighty = 1;
-				content.add(jsp, c);
-				content.setMaximumSize(null);
+				browserContentPanel.setMaximumSize(null);
 				
-				/*
-				 * I'm putting these constraint sets one one line to make things
-				 * a little tidier. I am aware this is probably not up to 
-				 * standards or might hamper readability, but I am a bit tired
-				 * of weird looking code with 14-character constraint sets 
-				 * spread over 10 lines.
-				 */
 				c.fill = GridBagConstraints.BOTH;
 				c.gridy = 0; c.gridx = 0; c.weightx = 1; c.weighty = 0.05;
-				bwindow.add(controls, c);
+				browserWindow.add(browserControlPanel, c);
 				c.gridy = 1; c.gridx = 0; c.weightx = 1; c.weighty = 0.95;
-				bwindow.add(content, c);
+				browserWindow.add(browserContentPanel, c);
 				
-				tree.addMouseListener(this);
-				tree.setExpandsSelectedPaths(true);
-				root.add(hpodata.getHPOHeirarchy("HP:0000001"));
-				jsp.setViewportView(tree);
-			}
-			private ArrayList<TreePath> find(DefaultMutableTreeNode parent, String hpo) {
-				ArrayList<TreePath> outAL = new ArrayList<TreePath>();
-				@SuppressWarnings("unchecked")
-				Enumeration<DefaultMutableTreeNode> e = parent.children();
-				while (e.hasMoreElements()) {
-					DefaultMutableTreeNode child = e.nextElement();
-					if (child.getUserObject().toString().toLowerCase().contains(hpo.toLowerCase())) {
-						outAL.add(new TreePath(child.getPath()));
+				treeScrollPane.add(waitlabel);
+				browserContentPanel.add(treeScrollPane, c);
+				
+				hpoBrowserTree.addMouseListener(this);
+				hpoBrowserTree.setExpandsSelectedPaths(true);
+				hpoBrowserTree.setLargeModel(true);
+			
+				DeltaGene.THREADPOOL.submit(new Runnable() {
+					@Override
+					public void run() {
+						while (!hpodata.isReady()) {
+							try {
+								Thread.sleep(50);
+							} catch (InterruptedException e) {
+								new Error(Error.CRIT_ERROR, Error.CRIT_ERROR_T,
+								WindowConstants.EXIT_ON_CLOSE, e);
+								e.printStackTrace();
+							}
+						}
+						treeScrollPane.remove(waitlabel);
+						treeScrollPane.setViewportView(hpoBrowserTree);
+						state = STATE_READY;
 					}
-					if (child.getChildCount() > 0) {
-						outAL.addAll(find(child, hpo));
-					}
-				}
-				return outAL;
+				});
 			}
-			
-			public void show(String hpo) {
-				addbutton.setEnabled(false);
-				show(hpo, null);
-			}
-			
-			public void show(String hpo, userinput input) {
-				if (input != null) {
-					addbutton.setEnabled(true);
-					addbutton.setActionCommand("add:"+input.getID());
-				}
-				tree.clearSelection();
-				tree.collapseAll();
-				for (TreePath path : find(root, hpo)) {
-					tree.makeVisible(path);
-					tree.addSelectionPath(path);
-				}
-				bwindow.pack();
-				bwindow.setLocationRelativeTo(null);
-				bwindow.setVisible(true);
-				bwindow.revalidate();
-				bwindow.repaint();
-				bwindow.pack();
-			}
-			
-			private void contextMenu(Point p) {
-				treemenu = new JPopupMenu();
-				treemenu.setPreferredSize(new Dimension(150,30));
-				treelistbtn = new JMenuItem("List selected");
-				treelistbtn.addActionListener(this);
-				treelistbtn.setActionCommand("list");
-				treemenu.add(treelistbtn);
-				treemenu.setLocation(p);
-				treemenu.setInvoker(bwindow);
-				treemenu.pack();
-				treemenu.revalidate();
-				treemenu.repaint();
-				treemenu.setVisible(true);
-			}
-			/**
-			 * displays the right mouse button menu, containing a button
-			 * to list the genes
-			 */
-			@Override
-			public void mouseClicked(MouseEvent e) {
-				if (e.getButton() == MouseEvent.BUTTON3) {
-					contextMenu(e.getLocationOnScreen());
-				}
-			}
-		
-			@Override
-			public void mouseEntered(MouseEvent e) {
-			}
-		
-			@Override
-			public void mouseExited(MouseEvent e) {
-			}
-		
-			@Override
-			public void mousePressed(MouseEvent e) {
-			}
-		
-			@Override
-			public void mouseReleased(MouseEvent e) {
-			}
-			
-			/**
-			 * This enables the user to press enter in the search menu,
-			 * instead of having to click the search button explicitly
-			 */
-			@Override
-			public void keyReleased(KeyEvent e) {
-				if (e.getComponent().equals(search)) {
-					if (e.getKeyCode() == KeyEvent.VK_ENTER) {
-						actionPerformed(new ActionEvent(search, ActionEvent.ACTION_PERFORMED, "search"));
-					}
-				}
-			}
-		
-			@Override
-			public void keyTyped(KeyEvent e) {}
-			@Override
-			public void keyPressed(KeyEvent e) {}
-		
 			@Override
 			public void actionPerformed(ActionEvent e) {
-				if (e.getActionCommand().equals("search")&&search.getText().length()>0) {
-					tree.clearSelection();
-					tree.collapseAll();
-					ArrayList<TreePath> AL = find(root, search.getText());
+				Long start, stop, time;
+				if (e.getActionCommand().equals("search")&&searchField.getText().length()>0) {
+					start = System.currentTimeMillis();
+					hpoBrowserTree.clearSelection();
+					hpoBrowserTree.expandAll(hpoBrowserTree, false);
+					ArrayList<TreePath> AL = find(rootNode, searchField.getText());
+					stop = System.currentTimeMillis();
+					time = stop - start;
+					System.out.println("find: "+time+" millis");
 					for (TreePath path : AL) {
-						tree.makeVisible(path);
+						hpoBrowserTree.makeVisible(path);
 					}
-					tree.setSelectionPaths(AL.toArray(new TreePath[AL.size()]));
-					//TreePath[] paths = new TreePath[AL.size()];
-					//paths = AL.toArray(paths);
+					stop = System.currentTimeMillis();
+					time = stop - start - time;
+					System.out.println("makevisible loop: "+time+" millis");
+					hpoBrowserTree.setSelectionPaths(AL.toArray(new TreePath[AL.size()]));
+					stop = System.currentTimeMillis();
+					time = stop - start - time;
+					System.out.println("setselection: "+time+" millis");
 				}if (e.getActionCommand().equals("list")) {
-					TreePath[] paths = tree.getSelectionPaths();
+					TreePath[] paths = hpoBrowserTree.getSelectionPaths();
 					StringBuilder sb = new StringBuilder();
 					String node;
 					for (TreePath path : paths) {
@@ -357,43 +898,250 @@ class input extends Gui {
 					System.out.println(id);
 				}
 			}
+			
+			private void contextMenu(Point p) {
+				browserMenu = new JPopupMenu();
+				browserMenu.setPreferredSize(new Dimension(150,30));
+				treeListButton = new JMenuItem("List selected");
+				treeListButton.addActionListener(this);
+				treeListButton.setActionCommand("list");
+				browserMenu.add(treeListButton);
+				browserMenu.setLocation(p);
+				browserMenu.setInvoker(browserWindow);
+				browserMenu.pack();
+				browserMenu.revalidate();
+				browserMenu.repaint();
+				browserMenu.setVisible(true);
+			}
+			
+			private ArrayList<TreePath> find(HPONumber parent, String hpo) {
+				ArrayList<TreePath> outAL = new ArrayList<TreePath>();
+				for (HPONumber child : parent.getChildren()) {
+					if (child.hpo().equals(hpo)) {
+						outAL.add(new TreePath(child.getPath()));
+					}
+					if (child.getChildCount() > 0) {
+						outAL.addAll(find(child, hpo));
+					}
+				}
+				return outAL;
+			}
+			
+			@Override
+			public void keyPressed(KeyEvent e) {}
+			/**
+			 * This enables the user to press enter in the search menu,
+			 * instead of having to click the search button explicitly
+			 */
+			@Override
+			public void keyReleased(KeyEvent e) {
+				if (e.getComponent().equals(searchField)) {
+					if (e.getKeyCode() == KeyEvent.VK_ENTER) {
+						actionPerformed(new ActionEvent(searchField, ActionEvent.ACTION_PERFORMED, "search"));
+					}
+				}
+			}
+		
+			@Override
+			public void keyTyped(KeyEvent e) {}
+		
+			/**
+			 * displays the right mouse button menu, containing a button
+			 * to list the genes
+			 */
+			@Override
+			public void mouseClicked(MouseEvent e) {
+				if (e.getButton() == MouseEvent.BUTTON3) {
+					contextMenu(e.getLocationOnScreen());
+				}
+			}
+		
+			@Override
+			public void mouseEntered(MouseEvent e) {
+			}
+			
+			@Override
+			public void mouseExited(MouseEvent e) {
+			}
+			
+			@Override
+			public void mousePressed(MouseEvent e) {
+			}
+			
+			@Override
+			public void mouseReleased(MouseEvent e) {
+			}
+			
+			public void showHPOHeirarchy(String hpo, HPOObject hpoData) {
+				addButton.setEnabled(false);
+				showHPOHeirarchy(hpo, hpoData, null);
+			}
+		
+			public void showHPOHeirarchy(final String hpo, final HPOObject hpoData, final userinput input) {
+				browserWindow.pack();
+				browserWindow.setLocationRelativeTo(null);
+				browserWindow.setVisible(true);
+				DeltaGene.THREADPOOL.submit(new Runnable() {
+					@Override
+					public void run() {
+						while (!isReady()) {
+							try {
+								Thread.sleep(50);
+							} catch (InterruptedException e) {
+								e.printStackTrace();
+							}
+						}
+						if (input != null) {
+							addButton.setEnabled(true);
+							addButton.setActionCommand("add:"+input.getID());
+						}
+						hpoBrowserTree.clearSelection();
+						for (TreePath path : find(rootNode, hpo)) {
+							hpoBrowserTree.expandPath(path);
+							hpoBrowserTree.addSelectionPath(path);
+						}
+					}
+				});
+			}
+			
+			boolean isReady() {
+				return state == STATE_READY;
+			}
+			public void showGenesUnderHPO(String substring, HPOObject HpoData) {
+				String[] HPOListUnderGene;
+				for (String gene : substring.split("[^A-Z0-9\\-]")) {
+					HPOListUnderGene = HpoData.getHPOFromGene(gene);
+					for (String hpoid : HPOListUnderGene) {
+						
+					}
+				}
+			}
 		}
 
 		/**
 		 * The HPONumber (sub)subclass contains information about a particular HPO term,
 		 * such as it's HPO number, phenotype, definition, genes and it's children/parents
 		 */
-		class HPONumber {
+		class HPONumber implements TreeNode {
 			private String hpoid = "Undefined";
 			private String phenotype = "Undefined";
 			private String definition = "Undefined";
-			private HashSet<String> genes = new HashSet<String>();
+			private HashSet<String> geneSet = new HashSet<String>();
 			private ArrayList<HPONumber> children = new ArrayList<HPONumber>();
+			private ArrayList<HPONumber> parents = new ArrayList<HPONumber>();
+			private boolean expandedByDefault = false;
 			
 			HPONumber (String hpo) {
 				set(hpo);
 			}
-			HPONumber (String hpo, String pheno, String def) {
-				set(hpo, pheno, def);
-			}
-			
 			public HPONumber(String hpo, HPONumber child) {
 				hpoid = hpo;
 				children.add(child);
 			}
-			public void set(String hpo) {
-				hpoid = hpo;
-			}
-			public void set(String hpo, String pheno, String def) {
-				set(hpo);
-				phenotype = pheno;
-				definition = def;
-			}
 			
-			public void set(String hpo, String pheno, String def, HPONumber child) {
+			HPONumber (String hpo, String pheno, String def) {
 				set(hpo, pheno, def);
+			}
+			public void addChild(HPONumber child) {
 				children.add(child);
 			}
+			public void addChildren(ArrayList<HPONumber> c) {
+				children.addAll(c);
+			}
+			
+			/**
+			 * Adds a gene to this HPONumber
+			 * @param gene 	gene to be added
+			 * @return true if gene was added, false if gene already exists.
+			 */
+			public boolean addGene(String gene) {
+				if (geneSet.contains(gene)) {
+					return false;
+				}
+				geneSet.add(gene);
+				return true;
+			}
+			
+			public boolean containsChild(HPONumber hpo) {
+				return containsChild(hpo, false);
+			}
+			/**
+			 * This function finds a child matching hpo in this hponumber's
+			 * children and, if recursive == true, this children's children. 
+			 * @param hpo	The @link{HPONumber} to search for
+			 * @param recursive	Recursively searches this HPO number's children
+			 * @return true if hpo is a child of this HPO number.
+			 * True if one of these children has hpo as a child and recursive = true
+			 */
+			public boolean containsChild(HPONumber hpo, boolean recursive) {
+				if (recursive) {
+					for (int i = 0; i < children.size(); i++) {
+						if (children.get(i).containsChild(hpo, recursive)) {
+							return true;
+						}
+					}
+				}
+				return false;
+			}
+			
+			/**
+			 * Returns the definition of this phenotype. May be undefined for certain HPONumbers (such as HP:0000001 - All)
+			 * @return the description as a string
+			 */
+			public String definition() {
+				return definition;
+			}
+			
+			/**
+			 * returns the amount of parents above this HPO number
+			 * @return the number of parents above this HPO number
+			 */
+			public int getParentCount() {
+				return parents.size();
+			}
+			
+			/**
+			 * Returns the amount of children under this HPO number.
+			 * @return The number of children under this HPO number.
+			 */
+			public int getChildCount() {
+				return children.size();
+			}
+			public void addParent(HPONumber parent) {
+				parents.add(parent);
+			}
+			public ArrayList<HPONumber> getParents() {
+				return parents;
+			}
+			public ArrayList<HPONumber> getChildren() {
+				return children;
+			}
+			
+			/**
+			 * Populates an ArrayList with this HPONumber's genes.
+			 * Will not add duplicate genes
+			 * @see collectGenes
+			 * @return A collection of genes as strings
+			 */
+			public void getGenes(ArrayList<String> inAL,
+					HashSet<String> set) {
+					for (String gene : geneSet) {
+						if (!set.contains(gene)) {
+							set.add(gene);
+							inAL.add(gene);
+						}
+					}
+			}
+			
+			/**
+			 * The getIDCollection(ArrayList<String>) function populates an {@link ArrayList}<String> with this HPONumber's hpo number,
+			 * and that of it's children (recursive).
+			 * @param out the {@link ArrayList}<String> to be populated.
+			 */
+			public void getIDCollection(HashSet<String> out){
+				getIDCollection(out, true);
+			}
+			
 			
 			/**
 			 * The getIDCollection(ArrayList<String>, boolean) function 
@@ -418,13 +1166,16 @@ class input extends Gui {
 					out.add(hpoid);
 				}
 			}
+			
 			/**
-			 * The getIDCollection(ArrayList<String>) function populates an {@link ArrayList}<String> with this HPONumber's hpo number,
-			 * and that of it's children (recursive).
-			 * @param out the {@link ArrayList}<String> to be populated.
+			 * Returns true if this HPO number's gene list > 0
+			 * @return True if gene list > 0, false if not.
 			 */
-			public void getIDCollection(HashSet<String> out){
-				getIDCollection(out, true);
+			public boolean hasGenes() {
+				if (geneSet.size() > 0) {
+					return true;
+				}
+				return false;
 			}
 			
 			/**
@@ -434,68 +1185,12 @@ class input extends Gui {
 			public String hpo() {
 				return hpoid;
 			}
-			
 			/**
 			 * Returns the phenotype associated with this HPONumber. Should not be undefined.
 			 * @return the phenotype as a string
 			 */
 			public String phenotype() {
 				return phenotype;
-			}
-			/**
-			 * Returns the definition of this phenotype. May be undefined for certain HPONumbers (such as HP:0000001 - All)
-			 * @return the description as a string
-			 */
-			public String definition() {
-				return definition;
-			}
-			
-			public ArrayList<HPONumber> getChildren() {
-				return children;
-			}
-			
-			public void addChild(HPONumber child) {
-				children.add(child);
-			}
-			
-			
-			public void addChildren(ArrayList<HPONumber> c) {
-				children.addAll(c);
-			}
-			
-			/**
-			 * Adds a gene to this HPONumber
-			 * @param gene 	gene to be added
-			 * @return true if gene was added, false if gene already exists.
-			 */
-			public boolean addGene(String gene) {
-				if (genes.contains(gene)) {
-					return false;
-				}
-				genes.add(gene);
-				return true;
-			}
-			
-			/**
-			 * This function finds a child matching hpo in this hponumber's
-			 * children and, if recursive == true, this children's children. 
-			 * @param hpo	The @link{HPONumber} to search for
-			 * @param recursive	Recursively searches this HPO number's children
-			 * @return true if hpo is a child of this HPO number.
-			 * True if one of these children has hpo as a child and recursive = true
-			 */
-			public boolean containsChild(HPONumber hpo, boolean recursive) {
-				if (recursive) {
-					for (int i = 0; i < children.size(); i++) {
-						if (children.get(i).containsChild(hpo, recursive)) {
-							return true;
-						}
-					}
-				}
-				return false;
-			}
-			public boolean containsChild(HPONumber hpo) {
-				return containsChild(hpo, false);
 			}
 			
 			/**
@@ -506,45 +1201,69 @@ class input extends Gui {
 				return parents.size();
 			}*/
 			
-			/**
-			 * Returns the amount of children under this HPO number.
-			 * @return The number of children under this HPO number.
-			 */
-			public int getChildCount() {
-				return children.size();
+			public void set(String hpo) {
+				hpoid = hpo;
 			}
 			
-			/**
-			 * Returns true if this HPO number's gene list > 0
-			 * @return True if gene list > 0, false if not.
-			 */
-			public boolean hasGenes() {
-				if (genes.size() > 0) {
-					return true;
-				}
-				return false;
+			public void set(String hpo, String pheno, String def) {
+				set(hpo);
+				phenotype = pheno;
+				definition = def;
 			}
 			
-			/**
-			 * Populates an ArrayList with this HPONumber's genes.
-			 * Will not add duplicate genes
-			 * @see collectGenes
-			 * @return A collection of genes as strings
-			 */
-			public void getGenes(ArrayList<String> inAL,
-					HashSet<String> set) {
-					for (String gene : genes) {
-						if (!set.contains(gene)) {
-							set.add(gene);
-							inAL.add(gene);
-						}
-					}
+			public void set(String hpo, String pheno, String def, HPONumber child) {
+				set(hpo, pheno, def);
+				children.add(child);
+			}
+			public void setDefinition(String def) {
+				definition = def;
 			}
 			public void setPhenotype(String pheno) {
 				phenotype = pheno;
 			}
-			public void setDefinition(String def) {
-				definition = def;
+			@Override
+			public Enumeration<HPONumber> children() {
+				return Collections.enumeration(children);
+			}
+			@Override
+			public boolean getAllowsChildren() {
+				return true;
+			}
+			@Override
+			public TreeNode getChildAt(int i) {
+				return children.get(i);
+			}
+			@Override
+			public int getIndex(TreeNode node) {
+				return children.indexOf(((HPONumber)node));
+			}
+			@Override
+			public TreeNode getParent() {
+				return parents.size() > 0 ? parents.get(0) : null;
+			}
+			@Override
+			public boolean isLeaf() {
+				return children.size() == 0;
+			}
+			public TreeNode[] getPath() {
+				return getPathToRoot(this,0);
+			}
+			protected TreeNode[] getPathToRoot(TreeNode node, int depth) {
+				if (node == null) {
+					if (depth == 0) {
+						return null;
+					}
+					return new TreeNode[depth];
+				}
+				TreeNode[] path = getPathToRoot(node.getParent(), depth+1);
+				path[path.length - depth - 1] = node;
+				return path;
+			}
+			public void setExpandedByDefault(boolean b) {
+				expandedByDefault = b;
+			}
+			public boolean getExpandedByDefault() {
+				return expandedByDefault;
 			}
 		}
 		
@@ -552,56 +1271,66 @@ class input extends Gui {
 		 * The data HashMap contains all instances of HPONumbers objects.
 		 * The key to each HPONumber is it's hpo id (HP:#######)
 		 */
+		private static HPOFile files;
 		private static HashMap<String, HPONumber> data = 
 				new HashMap<String, HPONumber>();
 		public Browser browser;
+		final static int STATE_INIT = 0;
+		final static int STATE_WAIT = 1;
+		final static int STATE_LOAD_HPO = 2;
+		final static int STATE_LOAD_ASSOC = 3;
+		final static int STATE_READY = 4;
+		private static int state;
+		private static HPONumber rootNode;
 		
-		/**
-		 * This function returns a HPO number that belongs to a given phenotype.
-		 * Phenotypes should be unique. Regardless, this function returns the 
-		 * first HPO number found with the given phenotype 
-		 * @param pheno the phenotype to look up
-		 * @return the associated HPO number. null if no HPO number found
-		 */
-		public String getHPOFromPhenotype(String pheno) {
-			for (HPONumber hpo : data.values()) {
-				if (hpo.phenotype().equals(pheno)) {
-					return hpo.hpo();
-				}
-			}
-			return null;
+		HPOObject(HPOFile hpofile) {
+			state = STATE_INIT;
+			files = hpofile;
+			rootNode = new HPONumber("HP:0000000", "Root",
+					"Root node for the Human Phenotype Ontology");
+			data.put("HP:0000000", rootNode);
 		}
 		
-		/**
-		 * This function returns a phenotype belonging to an HPO number.
-		 * @param hpo the hpo number to look up
-		 * @return the associated phenotype. Null if no phenotype found
-		 */
-		public String getPhenotypeFromHPO(String hpo) {
-			if (data.containsKey(hpo)) {
-				return data.get(hpo).phenotype();
+		// Finds the path of a given hpo number from bottom to top
+		public DefaultMutableTreeNode getReverseHPOHeirarchy(DefaultMutableTreeNode hponode) {
+			String hpo = hponode.getUserObject().toString().substring(0,10);
+			DefaultMutableTreeNode metaNode = new DefaultMutableTreeNode();
+			if (data.get(hpo).getParentCount() == 0) {
+				return hponode;
 			}
-			return null;
+			for (HPONumber parent : data.get(hpo).getParents()) {
+				metaNode.add(getReverseHPOHeirarchy(new DefaultMutableTreeNode(parent.hpo())));
+			}
+			return metaNode;
+		}
+
+		public void build(Input inputinstance) {
+			try {
+				if (files.state != HPOFILES.STATE_READY) {
+					state = STATE_WAIT;
+					wait();
+				}
+				state = STATE_LOAD_HPO;
+				populateHPOObject(files.getHPOFile());
+				browser = new Browser(this);
+				state = STATE_LOAD_ASSOC;
+				populateHPOGenes(files.getAssocFile());
+				state = STATE_READY;
+				rootNode.addChild(data.get("HP:0000001"));
+				rootNode.setExpandedByDefault(true);
+				data.get("HP:0000001").setExpandedByDefault(true);
+				inputinstance.notify();
+			}catch (InterruptedException e) {
+				e.printStackTrace();
+				new Error("A critical error occured! Try running the application as administrator.\n"
+						+ "If the issue persists, report the issue with the data below: \n\n"
+						+ e.getStackTrace(), "Critical error", WindowConstants.EXIT_ON_CLOSE);
+				// TODO: Cleanup for these kinds of problems
+			}
 		}
 		
-		/**
-		 * This function returns a full list of phenotypes, to be used in the
-		 * autocompletion of input boxes. The list of phenotypes will also
-		 * contain meta information, such as age of onset.
-		 * @return a full ArrayList of phenotypes.
-		 */
-		public ArrayList<String> getPhenosList() {
-			ArrayList<String> out = new ArrayList<String>();
-			HashSet<String> set = new HashSet<String>();
-			String pheno;
-			for (Entry<String, HPONumber> entry : data.entrySet()) {
-				pheno = entry.getValue().phenotype();
-				if (!set.contains(pheno)) {
-					set.add(pheno);
-					out.add(pheno);
-				}
-			}
-			return out;
+		public void findHPOGenes(String hpo, ArrayList<String> inAL) {
+			findHPOGenes(hpo, inAL, true);
 		}
 		
 		/**
@@ -616,6 +1345,7 @@ class input extends Gui {
 			String[] hpolist = hpo.toUpperCase().split("([^A-Z0-9:]+)");
 			findHPOGenes(hpolist, inAL, findchildren);
 		}
+		
 		public void findHPOGenes(String[] hpolist, ArrayList<String> inAL, boolean findchildren) {
 			HashSet<String> completehpolist = new HashSet<String>();
 			HashSet<String> set = new HashSet<String>();
@@ -635,54 +1365,34 @@ class input extends Gui {
 				}
 			}
 		}
-		public void findHPOGenes(String hpo, ArrayList<String> inAL) {
-			findHPOGenes(hpo, inAL, true);
+		public Browser getBrowser() {
+			return browser;
 		}
 		
 		/**
-		 * This function parses a list of genes input by the user and removes
-		 * any duplicates.
-		 * 
-		 * @param genelist the list of genes, input by the user
-		 * @param inAL the array list where the results are added to
+		 * This function returns a HPO number that belongs to a given phenotype.
+		 * Phenotypes should be unique. Regardless, this function returns the 
+		 * first HPO number found with the given phenotype 
+		 * @param pheno the phenotype to look up
+		 * @return the associated HPO number. null if no HPO number found
 		 */
-		public void parseUniqueGene(String genelist, ArrayList<String> inAL) {
-			String[] in = genelist.split("([^A-Z0-9\\-]+)");
-			ArrayList<String> out = new ArrayList<String>();
-			for (String gene : in) {
-				if (!out.contains(gene)) {
-					out.add(gene);
+		public String getHPOFromPhenotype(String pheno) {
+			for (HPONumber hpo : data.values()) {
+				if (hpo.phenotype().equals(pheno)) {
+					return hpo.hpo();
 				}
 			}
-			for (int i = 0; i < out.size(); i++) {
-				inAL.add(out.get(i));
-			}
+			return null;
 		}
-
-		/**
-		 * This function parses a (list) number as a HPO number, padding it with
-		 * zeroes and prefixing 'HP:'. This function does not check if
-		 * the hpo number exists
-		 * @param num the (list of) numbers to be parsed
-		 * @return an array of syntactically valid HPO numbers
-		 */
-		public String[] parseNumbersAsHPO(String num) {
-			ArrayList<String> outAL = new ArrayList<String>();
-			for (String number : num.split("([^\\d]+)")) {
-				
-				StringBuilder sb = new StringBuilder("HP:");
-				if (number.length() < 8) {
-					for (int i = number.length(); i < 7; i++) {
-						sb.append('0');
-					}
-					sb.append(number);
-					outAL.add(sb.toString());
-					sb.delete(0, sb.length());
-				}else{
-					outAL.add(null);
+		
+		public String[] getHPOFromGene(String gene) {
+			ArrayList<String> out = new ArrayList<String>();
+			for (HPONumber hpo : data.values()) {
+				if (hpo.geneSet.contains(gene)) {
+					out.add(hpo.hpoid);
 				}
 			}
-			return outAL.toArray(new String[outAL.size()]);
+			return out.toArray(new String[out.size()]);
 		}
 		
 		/**
@@ -709,7 +1419,164 @@ class input extends Gui {
 			}
 			return node;
 		}
+
+		/**
+		 * This function returns a full list of phenotypes, to be used in the
+		 * autocompletion of input boxes. The list of phenotypes will also
+		 * contain meta information, such as age of onset.
+		 * @return a full ArrayList of phenotypes.
+		 */
+		public TreeMap<String, String> getACList() {
+			
+			TreeMap<String, String> out = new TreeMap<String, String>();
+			HashSet<String> set = new HashSet<String>();
+			for (HPONumber entry : data.values()) {
+				if (!set.contains(entry.phenotype())) {
+					set.add(entry.phenotype());
+					out.put(entry.phenotype(), entry.hpo());
+				}
+			}
+			return out;
+		}
 		
+		/**
+		 * This function returns a phenotype belonging to an HPO number.
+		 * @param hpo the hpo number to look up
+		 * @return the associated phenotype. Null if no phenotype found
+		 */
+		public String getPhenotypeFromHPO(String hpo) {
+			if (data.containsKey(hpo)) {
+				return data.get(hpo).phenotype();
+			}
+			return null;
+		}
+		
+	/**
+	 * This function parses a (list) number as a HPO number, padding it with
+	 * zeroes and prefixing 'HP:'. This function does not check if
+	 * the hpo number exists
+	 * @param num the (list of) numbers to be parsed
+	 * @return an array of syntactically valid HPO numbers
+	 */
+	public String[] parseNumbersAsHPO(String num) {
+		ArrayList<String> outAL = new ArrayList<String>();
+		for (String number : num.split("([^\\d]+)")) {
+			
+			StringBuilder sb = new StringBuilder("HP:");
+			if (number.length() < 8) {
+				for (int i = number.length(); i < 7; i++) {
+					sb.append('0');
+				}
+				sb.append(number);
+				outAL.add(sb.toString());
+				sb.delete(0, sb.length());
+			}else{
+				outAL.add(null);
+			}
+		}
+		return outAL.toArray(new String[outAL.size()]);
+	}
+	
+	/**
+	 * This function parses a list of genes input by the user and removes
+	 * any duplicates.
+	 * 
+	 * @param genelist the list of genes, input by the user
+	 * @param inAL the array list where the results are added to
+	 */
+	public void parseUniqueGene(String genelist, ArrayList<String> inAL) {
+		String[] in = genelist.split("([^A-Z0-9\\-]+)");
+		ArrayList<String> out = new ArrayList<String>();
+		for (String gene : in) {
+			if (!out.contains(gene)) {
+				out.add(gene);
+			}
+		}
+		for (int i = 0; i < out.size(); i++) {
+			inAL.add(out.get(i));
+		}
+	}
+	
+	/**
+	 * This function populates the hponumbers with their genes.
+	 * Passes through the association file line-by-line and adds
+	 * a gene to each HPO number it comes across
+	 * @param inassoc the association file to be used
+	 */
+	private void populateHPOGenes(File inassoc) {
+		try {
+			BufferedReader in = new BufferedReader(new FileReader(inassoc));
+			String hpo;
+			String gene;
+			String line;
+			String[] split;
+			StringBuilder invalidhpo = new StringBuilder(); // array of HPO files that do not exist
+			int HPOColumn = -1;
+			int GeneColumn = -1;
+			Boolean invalid = false;
+			long start, stop, time;
+			start = System.currentTimeMillis();
+			
+			while ((line = in.readLine()) != null) {
+				// get column numbers for data
+				if (line.contains("#Format: ")) {
+					split = line.substring(9).split("<tab>");
+						for (int i = 0; i < split.length; i++) {
+							if (split[i].equals("HPO-ID")) {
+								HPOColumn = i;
+							}if (split[i].equals("gene-symbol")) {
+								GeneColumn = i;
+							}
+						}
+				}
+				// get data
+				if (line.contains("HP:") && HPOColumn > -1 && GeneColumn > -1) {
+					split = line.split("\t");
+					hpo = split[HPOColumn];
+					gene = split[GeneColumn];
+					if (data.containsKey(hpo)) {
+						data.get(hpo).addGene(gene);
+					}else{
+						/* if an HPO number does not exist, add it to the invalid
+						 * list and flag the association file for invalid
+						 */
+						invalidhpo.append(hpo+"\n");
+						invalid = true;
+					}
+				}
+				if (data.size() == 0) {
+					/* if the entire data set is empty, something went wrong
+					 * in parsing the association file.
+					 */
+					invalid = true;
+				}
+			}
+			if (invalid)
+				if (HPOColumn == -1 || GeneColumn == -1) {
+					new Error("Error in parsing gene file. Please (re)move "
+							+ " or replace the .assoc file in the /HPO/ "
+							+ "folder and try again.",
+							"Parse error",
+							WindowConstants.EXIT_ON_CLOSE);
+				}else{
+					new Error("Some genes were found with unknown HPO numbers,"
+							+ " the HPO data might be outdated or invalid.\n"
+							+ "Make sure your HPO files are up to date.\n\n"
+							+ "List of HPO numbers that occur in the .assoc "
+							+ "file, but not in the .hpo file:\n\n"
+							+ invalidhpo.toString(),
+							"Attention",
+							WindowConstants.DISPOSE_ON_CLOSE);
+				}
+			in.close();
+			stop = System.currentTimeMillis();
+			time = stop - start;
+			System.out.println("Populating gene list took "+time+" millis");
+		}catch (IOException e) {
+			e.printStackTrace();
+		}
+	}
+
 	private void populateHPOObject (File inhpo) {
 		try {
 			BufferedReader in = new BufferedReader(new FileReader(inhpo));
@@ -748,8 +1615,10 @@ class input extends Gui {
 					if (!data.containsKey(parent)) {
 						parentObject = new HPONumber(parent, _hpo);
 						data.put(parent, parentObject);
+						_hpo.addParent(parentObject);
 					}else{
 						data.get(parent).addChild(_hpo);
+						_hpo.addParent(data.get(parent));
 					}
 				}
 				if (line.isEmpty()) {
@@ -775,547 +1644,63 @@ class input extends Gui {
 		}
 	}
 	
-	/**
-	 * This function populates the hponumbers with their genes.
-	 * Passes through the association file line-by-line and adds
-	 * a gene to each HPO number it comes across
-	 * @param inassoc the association file to be used
-	 */
-	private void populateHPOGenes(File inassoc) {
-		try {
-			BufferedReader in = new BufferedReader(new FileReader(inassoc));
-			String hpo;
-			String gene;
-			String line;
-			Boolean invalid = false;
-			long start, stop, time;
-			start = System.currentTimeMillis();
-			while ((line = in.readLine()) != null) {
-				if (line.contains("HP:")) {
-					hpo = line.substring(line.indexOf("HP:"), line.indexOf("\t",
-							line.indexOf("HP:")));
-					gene = line.substring(line.indexOf("\t")+1, line.indexOf("\t",
-							line.indexOf("\t")+1));
-					if (data.containsKey(hpo)) {
-						data.get(hpo).addGene(gene);
-					}else{
-						// if a non-existant HPO term was found, we notify the user
-						invalid = true;
-					}
-				}
-			}
-			if (invalid)
-				new Error("Some genes were found with unknown HPO numbers,"
-						+ " the HPO data might be outdated or invalid.\n"
-						+ "Make sure your HPO files are up to date.",
-						"Attention",
-						JFrame.DISPOSE_ON_CLOSE);
-			in.close();
-			stop = System.currentTimeMillis();
-			time = stop - start;
-			System.out.println("Populating gene list took "+time+" millis");
-		}catch (IOException e) {
-			e.printStackTrace();
-		}
-	}
-	
-	HPOObject(File inhpo, File inassoc) {
-		populateHPOObject(inhpo);
-		populateHPOGenes(inassoc);
-		browser = new Browser(this);
+	public void reloadFiles() {
+		data.clear();
+		populateHPOObject(files.getHPOFile());
+		populateHPOGenes(files.getAssocFile());
 	}
 
-	public Browser getBrowser() {
-		return browser;
+	public int getState() {
+		return state;
+	}
+	
+	public boolean isReady() {
+		return state == STATE_READY;
+	}
+
+	@Override
+	public void addTreeModelListener(TreeModelListener arg0) {
+		// TODO Auto-generated method stub
+		
+	}
+
+	@Override
+	public Object getChild(Object node, int i) {
+		return ((HPONumber)node).getChildAt(i);
+	}
+
+	@Override
+	public int getChildCount(Object node) {
+		return ((HPONumber)node).getChildCount();
+	}
+
+	@Override
+	public int getIndexOfChild(Object node, Object child) {
+		return ((HPONumber)node).getIndex((HPONumber)child);
+	}
+
+	@Override
+	public Object getRoot() {
+		return rootNode;
+	}
+
+	@Override
+	public boolean isLeaf(Object node) {
+		return ((HPONumber)node).isLeaf();
+	}
+
+	@Override
+	public void removeTreeModelListener(TreeModelListener arg0) {
+		// TODO Auto-generated method stub
+		
+	}
+
+	@Override
+	public void valueForPathChanged(TreePath arg0, Object arg1) {
+		// TODO Auto-generated method stub
+		
 	}
 }
-	
-	/**
-	 * This class handles the autocompletion for the textareas
-	 */
-	class Autocomplete extends input implements DocumentListener, ActionListener {
-		class keyHandler implements KeyListener, FocusListener {
-			private void highlightselection (int index) {
-				for (int i = 0; i < dropdown.getComponentCount(); i++) {
-					if (i == index) {
-						dropdown.getComponent(i).setBackground(UIManager.getColor("MenuItem.selectionBackground"));
-						dropdown.getComponent(i).setForeground(UIManager.getColor("MenuItem.selectionForeground"));
-					}else{
-						dropdown.getComponent(i).setBackground(UIManager.getColor("MenuItem.background"));
-						dropdown.getComponent(i).setForeground(UIManager.getColor("MenuItem.foreground"));
-					}
-				}
-			}
-			
-			@Override
-			public void keyReleased(KeyEvent e) {
-				int key = e.getKeyCode();
-				int index = dropdown.getSelectionModel().getSelectedIndex();
-				if (key == KeyEvent.VK_DOWN&&dropdown.isVisible()) {
-					if (index+1>dropdown.getComponentCount()-1) {
-						dropdown.getSelectionModel().setSelectedIndex(0);
-					}else{
-						dropdown.getSelectionModel().setSelectedIndex(index+1);
-					}
-				}
-				if (key == KeyEvent.VK_UP&&dropdown.isVisible()) {
-					if (index-1<0) {
-						dropdown.getSelectionModel().setSelectedIndex(dropdown.getComponentCount()-1);
-					}else{
-						dropdown.getSelectionModel().setSelectedIndex(index-1);
-					}
-				}
-				highlightselection(dropdown.getSelectionModel().getSelectedIndex());
-				if (key == KeyEvent.VK_ENTER&&dropdown.isVisible()) {
-					if (index > -1) {
-						ActionEvent ae = new ActionEvent(dropdown.getComponent(index), ActionEvent.ACTION_PERFORMED, ((JMenuItem)dropdown.getComponent(index)).getActionCommand());
-						actionPerformed(ae);
-						dropdown.setVisible(false);
-					}
-				}
-				if (key == KeyEvent.VK_ESCAPE&&dropdown.isVisible()) {
-					dropdown.setVisible(false);
-				}
-			}
-			
-
-			public void keyPressed(KeyEvent e) {
-				int key = e.getKeyCode();
-				if ((key == KeyEvent.VK_DOWN||key == KeyEvent.VK_UP||key == KeyEvent.VK_ENTER)&&dropdown.isVisible()) {
-					e.consume();
-				}
-			}
-			
-			public void keyTyped(KeyEvent e) {
-			}
-
-			@Override
-			public void focusGained(FocusEvent e) {
-				if (invoker == null||!e.getComponent().equals(invoker.getInputBox())) {
-					invoker = getInputboxObject((JTextArea)e.getSource());
-					dropdown.setInvoker(invoker.getInputBox());
-				}
-			}
-
-			@Override
-			public void focusLost(FocusEvent arg0) {
-			}
-		}
-		
-		class acWindow extends JPopupMenu {
-			private static final long serialVersionUID = 1L;
-			public void show(int num) {
-				setPreferredSize(new Dimension(invoker.getSize().width, num*22));
-				setLocation(invoker.getInputBoxLocationOnScreen().x, invoker.getInputBoxLocationOnScreen().y+invoker.getSize().height);
-				pack();
-				revalidate();
-				repaint();
-				if (!isVisible()) {
-					setVisible(true);
-				}	
-			}
-		}
-		
-		acWindow dropdown;
-		keyHandler kh;
-		
-		userinput invoker;
-		ArrayList<String> phenos = new ArrayList<String>();
-		
-		public Autocomplete (ArrayList<String> keywords) {
-			kh = new keyHandler();
-			dropdown = new acWindow();
-			dropdown.addFocusListener(kh);
-			dropdown.setVisible(false);
-			phenos.addAll(keywords);
-			Collections.sort(phenos);
-		}
-		
-		public void add (userinput input) {
-			input.getDocument().addDocumentListener(this);
-			input.getInputBox().addFocusListener(kh);
-			input.getInputBox().addKeyListener(kh);
-		}
-		
-		@Override
-		public void insertUpdate (DocumentEvent e) {
-			int len;
-			String s;
-			String hpo;
-			Document doc = e.getDocument();
-			JMenuItem jmitem;
-			int num = 0;
-			
-			
-			invoker.getInputBox().setComponentPopupMenu(dropdown);
-			dropdown.removeAll();
-			dropdown.setInvoker(invoker.getInputBox());
-			len = doc.getLength();
-			if (len > 2) {
-				s = invoker.getText();
-				if (invoker.getInputType() == 0) {
-					for (String search : phenos) {
-						if (search.toLowerCase().contains(s.toLowerCase())&&num<10) {
-							hpo = HPODATA.getHPOFromPhenotype(search);
-							jmitem = new JMenuItem(search+" ("+hpo+")");
-							jmitem.setComponentPopupMenu(dropdown);
-							jmitem.addActionListener(this);
-							jmitem.addKeyListener(kh);
-							jmitem.setActionCommand(hpo);
-							jmitem.setEnabled(true);
-							jmitem.setOpaque(true);
-							dropdown.add(jmitem);
-							num++;
-						}
-					}
-					dropdown.show(num);
-					invoker.getInputBox().requestFocusInWindow();
-				}
-			}
-		}
-		
-		@Override
-		public void removeUpdate (DocumentEvent e) {
-			if (e.getLength() == e.getDocument().getLength()) {
-				return;
-			}else{
-				insertUpdate(e);
-			}
-		}
-		
-		public void actionPerformed(ActionEvent e) {
-			String hpo = e.getActionCommand();
-			((JTextArea)dropdown.getInvoker()).setText(hpo);
-		}
-
-		@Override
-		public void changedUpdate(DocumentEvent e) {}
-	}
-	/**
-	 * The userinput class takes care of the user's input, including
-	 * parsing the type of input, 
-	 */
-	class userinput implements DocumentListener, HyperlinkListener {
-		private JTextArea inputbox;
-		private JEditorPane infobox;
-		private JScrollPane inputjsp;
-		private JScrollPane infojsp;
-		private Document inputdoc;
-		private int group;
-		private int id;
-		
-		userinput(int assignedgroup) {
-			id = getInputCount();
-			group = assignedgroup;
-			inputbox = new JTextArea();
-			inputdoc = inputbox.getDocument();
-			inputjsp = new JScrollPane(inputbox,
-					JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED,
-					JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
-			inputjsp.setPreferredSize(new Dimension(
-					inputcontainer.getWidth()-10, getInputh()));
-			inputdoc.addDocumentListener(this); 
-			inputbox.setFocusTraversalKeysEnabled(false);
-			infobox = new JEditorPane();
-			infobox.setContentType("text/html");
-			infobox.addHyperlinkListener(this);
-			infobox.setBackground(Color.getHSBColor(0, 0, 
-					(float)0.9));
-			infojsp = new JScrollPane(infobox, 
-					JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED, 
-					JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
-			infojsp.setPreferredSize(new Dimension(
-					inputcontainer.getWidth()-10, getInfoh()));
-			infobox.setEditable(false);
-			inputcontainer.add(inputjsp);
-			inputcontainer.add(infojsp);
-			ac.add(this);
-			updateInfoBox();
-		}
-		
-		Dimension getSize() {
-			return inputbox.getSize();
-		}
-		
-		int getID() {
-			return id;
-		}
-
-		void setInputGroup(int newgroup) {
-			group = newgroup;
-		}
-		
-		int getInputGroup() {
-			return group;
-		}
-		
-		String getInputText () {
-			return inputbox.getText();
-		}
-		
-		String getText() {
-			return getInputText();
-		}
-		
-		void setInputText(String text) {
-			inputbox.setText(text);
-		}
-		
-		void setInputInfo(String text) {
-			infobox.setText(text);
-		}
-		
-		JEditorPane getInfoBox() {
-			return infobox;
-		}
-		
-		JTextArea getInputBox() {
-			return inputbox;
-		}
-		
-		/**
-		 * Returns the type of input in the inputbox.
-		 * <p>
-		 * <ol start=0>
-		 * <li>List of hpo numbers</li>
-		 * <li>Single hpo number</li>
-		 * <li>Gene symbols</li>
-		 * <li>Digits</li>
-		 * <li>Mixed input</li>
-		 * <li>invalid</li>
-		 * </ol>
-		 * </p>
-		 * @return An int signifying the type of input
-		 */
-		int getInputType() {
-			String in = getInputText();
-			/*
-			 * The first if checks if HP: occurs at all, in which case 
-			 * an HPO number is assumed to be the input. The second if
-			 * checks if any other instances of HP: occur after the 
-			 * first, which signifies a list of HPO numbers.*/
-			 
-			if (in.toUpperCase().indexOf("HP:") > -1) {
-				if (in.toUpperCase().substring(in.toUpperCase().
-						indexOf("HP:")+1).contains("HP:")) { 
-					return 1;
-				}else{
-					return 2;
-				}
-			}
-			int type = 0;
-			// split lines by newline and whitespace
-			String[] lines = in.split("[\\n\\s]"); 
-			for (String line : lines) {
-				// any lowercase characters indicate no genelist or HPO num
-				if (line.matches("[a-z]")) { 
-					return 0;
-					/* if this line contains a multitude of capital letters,
-					 * return genelist */
-				}if (line.matches("[A-Z]+")) {
-					// if type has been set before, input is mixed.
-					if (type == 4) {
-						return 5; 
-					}else{
-						type = 3;
-					}
-					// if this contains one to seven digits, return digits
-				}if (line.matches("[\\d]{1,7}")) {
-					if (type == 3) {
-						return 5;
-					}else{
-						type = 4;
-					}
-				}
-			}
-			return type;
-		}
-		
-		// gets the document associated with the inputbox
-		public Document getDocument() {
-			return inputdoc;
-		}
-		
-		/**
-		 * Returns the location of the inputbox relative
-		 * to the screen
-		 * @return location of this input's inputbox relative to the scren
-		 */
-		public Point getInputBoxLocationOnScreen() {
-			return inputbox.getLocationOnScreen();
-		}
-		
-		// clears the inputbox of text
-		public void clear() {
-			inputbox.setText("");
-		}
-
-		@Override
-		public void changedUpdate(DocumentEvent e) {}
-		
-		/**
-		 *  This updates the infobox with information on the user's input 
-		 */
-		@Override
-		public void insertUpdate(DocumentEvent e) {
-			updateInfoBox(getInputType());
-		}
-		/**
-		 * @see insertUpdate
-		 */
-		@Override
-		public void removeUpdate(DocumentEvent e) {
-			insertUpdate(e);
-		}
-		
-		/**
-		 * returns the inputscrollpane. used in removing an input
-		 * @return the inputboxes' JScrollPane
-		 */
-		public JScrollPane getInputScrollPane() {
-			return inputjsp;
-		}
-
-		/**
-		 * returns the infoboxes' JScrollpane. used in removing an input
-		 * @return the infoboxes' JScrollPane
-		 */
-		public JScrollPane getInfoScrollPane() {
-			return infojsp;
-		}
-		
-		
-		/**
-		 * Updates the infobox based upon the type of input in the
-		 * inputbox.
-		 */
-		public void updateInfoBox() {
-			updateInfoBox(getInputType());
-		}
-		
-		/**
-		 * Updates the infobox based upon a particular type
-		 * @param type the type to assume
-		 */
-		public void updateInfoBox(int type) {
-			String pheno;
-			StringBuilder sb = new StringBuilder();
-			switch(type) {
-			case 0:		
-				setInputInfo("Type Genes, HPO number, "
-						+ "or start typing a phenotype in the field.");
-				break;
-			case 1:
-				sb.append("Type: List of HPO numbers:");
-				String[] hponums = getInputText().toUpperCase()
-						.split("([^A-Z0-9:]+)");
-				for (String hpo : hponums) {
-					pheno = HPODATA.getPhenotypeFromHPO(hpo);
-					if (pheno == null) {
-						sb.append("<br>"+hpo+" - "
-								+ "No associated phenotype.");
-					}else{
-						/* 
-						 * When either of these links in the infobox is
-						 * clicked, hyperlinkUpdate takes action based upon
-						 * the tree: or genes:  in front of an HPO number.
-						 * tree: lists the HPO numbers in the HPO browser
-						 * tree, genes: lists the genes associated with
-						 * this HPO number in a table
-						 */
-						sb.append("<br>"+hpo+" - "+pheno+". "
-								+ "<a href=\"genes:"+hpo+"\">List genes</a>"
-								+ " | <a href=\"tree:"+hpo
-								+"\">Show in browser</a>");
-					}
-				}
-				infobox.setText(sb.toString());
-				break;
-			case 2:
-				String text = getInputText().toUpperCase();
-				if (text.length() == 10) {
-					if (HPODATA.getPhenotypeFromHPO(text) != null) {
-						infobox.setText("Type: Single HPO number:<br>"
-					+text+" - "+HPODATA.getPhenotypeFromHPO(text)+
-					" (<a href=\"genes:"+text
-					+"\">List genes</a> | <a href=\"tree:"
-					+text+"\">Show in browser</a>)");
-					}else{
-						infobox.setText("Type: Single HPO number:<br>"+
-					text+" - no associated phenotype.");
-					}
-				}else{
-					infobox.setText("Type: Single HPO number:<br>"
-							+ "(Requires seven digits)");
-				}
-				break;
-			case 3:
-				infobox.setText("Type: List of genes");
-				break;
-			case 4:
-				sb.append("Type: List of numbers (Parsed as HPO numbers):");
-				for (String hpo : HPODATA.parseNumbersAsHPO(
-						inputbox.getText())) {
-					if (hpo == null) {
-						hpo = "Invalid HPO number";
-					}
-					pheno = HPODATA.getPhenotypeFromHPO(hpo);
-					if (pheno != null) {
-						sb.append("<br>"+hpo+" - "+pheno
-								+" (<a href=\"genes:"+hpo
-								+"\">List genes</a> | <a href=\"tree:"
-								+hpo+"\">Show in browser</a>)");
-					}else{
-						sb.append("<br>"+hpo+" - Unknown phenotype.");
-					}
-				}
-				infobox.setText(sb.toString());
-				break;
-			default:	
-				infobox.setText("Invalid input");
-				break;
-			}
-		}
-		/**
-		 * When a link in an infobox is clicked, this will activate an
-		 * appropriate action based on it's prefix.
-		 * <ul>
-		 * <li>genes: List genes in table</li>
-		 * <li>tree: Show HPO term in hpo browser</li>
-		 * </ul>
-		 */
-		@Override
-		public void hyperlinkUpdate(HyperlinkEvent e) {
-			if (e.getEventType() == HyperlinkEvent.EventType.ACTIVATED) {
-				String desc = e.getDescription();
-				if (desc.contains("genes:")) {
-					resultobject.generate(desc.substring(6));
-				}else if (desc.contains("tree:")) {
-					HPODATA.browser.show(desc.substring(5));
-				}
-			}
-		}
-		
-		/**
-		 * This makes a list of genes in this inputbox unique, removing
-		 * any duplicate genes.
-		 */
-		public void makeGenelistUnique() {
-			if (getInputType() == 3) {
-				StringBuilder sb = new StringBuilder();
-				String[] in = getInputText().split("([^A-Z0-9\\-]+)");
-				HashSet<String> out = new HashSet<String>();
-				for (String gene : in) {
-					if (!out.contains(gene)) {
-						out.add(gene);
-						sb.append(gene);
-						sb.append(System.lineSeparator());
-					}
-				}
-				setInputText(sb.toString());
-			}
-		}
-	}
 	
 	/**
 	 * The result class handles displaying, generating and exporting
@@ -1334,98 +1719,124 @@ class input extends Gui {
 		String[][] results; // contains the data for the JTable
 		int[][] stats;
 		
-		/**
-		 * This function displays the results passed by results and headers
-		 * @param results the results in the form of a two-dimensional string array
-		 * @param headers the headers in the form of a string array
-		 */
-		public void showResults(String[][] results, String[] headers) {
-			reswindow = new JFrame("Results");
-			restable = new JTable(results, headers);
-			if (headers.length > 5) {
-				restable.setAutoResizeMode(JTable.AUTO_RESIZE_OFF);
-			}
-			respanelsp = new JScrollPane(restable);
-			menubar = new JMenuBar();
-			filemenu = new JMenu("File");
-			export = new JMenuItem("Export to file...");
-			export.addActionListener(this);
-			export.setActionCommand("export");
-			reswindow.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
-			reswindow.setPreferredSize(window.getSize());
-			reswindow.setJMenuBar(menubar);
-			menubar.add(filemenu);
-			filemenu.add(export);
-			reswindow.add(respanelsp);
-			reswindow.pack();
-			reswindow.setLocationRelativeTo(null);
-			reswindow.setVisible(true);
-		}
-		
-		/**
-		 * This method will pass a list of genes associated with a given
-		 * hpo number to generateResults(ArrayList<String> ArrayList<ArrayList<String>>, int)
-		 * @param hpo a specific, valid hpo number.
-		 */
-		public void generateResults(String hpo) {
-			ArrayList<ArrayList<String>> oB = new ArrayList<ArrayList<String>>();
-			for (String hpon : hpo.split("(,)")) {
-				oB.add(new ArrayList<String>());
-				HPODATA.findHPOGenes(hpon, oB.get(oB.size()-1),true);
-			}
-			generateResults(null, oB, LIST);
-		}
-		
-		/**
-		 * This method will retrieve the genes associated with an hpo number input by the user
-		 * and passes it to generateResults(ArrayList<String> ArrayList<ArrayList<String>>, int).
-		 * @param inputs the userinputs available
-		 */
-		public void generateResults(ArrayList<userinput> inputs) {
-			ArrayList<String> oA = new ArrayList<String>();
-			ArrayList<ArrayList<String>> oB = new ArrayList<ArrayList<String>>();
-			String txt;
-			int type;
-			
-			for (userinput input : inputs) {
-				if (input.getInputGroup() == 0) {
-					txt = input.getInputText();
-					type = input.getInputType();
-					if (type == 0) {
-						setInputError("Input A is invalid!");
+		@Override
+		public void actionPerformed(ActionEvent ae) {
+			if (ae.getActionCommand().equals("export")) {
+				try {
+					/**
+					 * This override of the approveSelection method of the JFileChooser class
+					 * will ask the user whether they want to overwrite the
+					 * selected file if it exists.
+					 */
+					JFileChooser filechooser = new JFileChooser() {
+						private static final long serialVersionUID = 1L;
+
+						@Override
+						public void approveSelection() {
+							File f = getSelectedFile();
+							if (f.exists()&&getDialogType() == SAVE_DIALOG&&f.toString().toLowerCase().endsWith(".csv")) {
+								int result = JOptionPane.showConfirmDialog(this,
+										"Would you like to overwrite the existing file?",
+										"Confirm overwrite", JOptionPane.YES_NO_CANCEL_OPTION);
+								switch (result) {
+									case JOptionPane.YES_OPTION:
+										super.approveSelection();
+										break;
+									case JOptionPane.NO_OPTION:
+										break;
+									case JOptionPane.CANCEL_OPTION:
+										break;
+									case JOptionPane.CLOSED_OPTION:
+										break;
+								}
+							}else{
+								super.approveSelection();
+							}
+						}
+					};
+					File file;
+					String newline = System.getProperty("line.separator");
+					int res = filechooser.showSaveDialog(reswindow);
+					if (res == JFileChooser.APPROVE_OPTION) {
+						file = filechooser.getSelectedFile();
+						if (!file.toString().toLowerCase().endsWith(".csv")) {
+							file = new File(file.getAbsolutePath()+".csv");
+						}
+						if (!file.createNewFile()) {
+							file.delete();
+							if (!file.createNewFile()) {
+								new Error("Could not create export file.", "Export error", WindowConstants.DISPOSE_ON_CLOSE);
+								return;
+							}
+						}
+						FileWriter outfile = new FileWriter(file);
+						for (int i = 0; i < headers.length; i++) {
+							outfile.append(headers[i]+" - "+HPODATA.getPhenotypeFromHPO(headers[i]));
+							if (i < headers.length-1) {
+								outfile.append(",");
+							}
+						}
+						outfile.append(newline);
+						for (String[] resultsy : results) {
+							for (int i = 0; i < resultsy.length; i++) {
+								outfile.append(resultsy[i]);
+								if (i < resultsy.length-1) {
+									outfile.append(",");
+								}
+							}
+							outfile.append(newline);
+						}
+						outfile.close();
+					}else if (res == JFileChooser.ERROR_OPTION) {
+						new Error("An error occurred when choosing an export file", "Export error", WindowConstants.DISPOSE_ON_CLOSE);
 						return;
-					}else if (type == 1||type == 2) {
-						
-						HPODATA.findHPOGenes(txt, oA);
-					}else if (type == 3) {
-						HPODATA.parseUniqueGene(txt, oA);
-					}else if (type == 4) {
-						HPODATA.findHPOGenes(HPODATA.parseNumbersAsHPO(txt), oA, true);
 					}
-				}else{
-					oB.add(new ArrayList<String>());
-					txt = input.getInputText();
-					type = input.getInputType();
-					if (type == 0) {
-						setInputError("One of the B inputs is invalid!");
-						return;
-					}else if (type == 1||type == 2) {
-						HPODATA.findHPOGenes(txt, oB.get(oB.size()-1));
-					}else if (type == 3) {
-						HPODATA.parseUniqueGene(txt, oB.get(oB.size()-1));
-					}else if (type == 4) {
-						HPODATA.findHPOGenes(HPODATA.parseNumbersAsHPO(txt), oB.get(oB.size()-1), true);
-					}
+				}catch (IOException e) {
+					e.printStackTrace();
 				}
 			}
-			generateResults(oA, oB, getOperator());
+		}
+		
+		public void generate(ArrayList<userinput> in) {
+			headers = null;
+			results = null;
+			
+			getHeaders(in);
+			generateResults(in);
+			if (results == null) {
+				new Error(getInputError(), "Result error", WindowConstants.DISPOSE_ON_CLOSE);
+				return;
+			}
+			showResults(results, headers);
+		}
+		
+		/**
+		 *  
+		 * @param hpo
+		 */
+		public void generate(String hpo) {
+			headers = null;
+			results = null;
+			headers = hpo.split("(,)");
+			for (int i = 0; i < headers.length; i++) {
+				headers[i] = headers[i]+" - "+HPODATA.getPhenotypeFromHPO(headers[i]);
+			}
+			generateResults(hpo);
+			if (results == null) {
+				new Error(getInputError(), "Result error", WindowConstants.DISPOSE_ON_CLOSE);
+				return;
+			}
+			showResults(results, headers);
 		}
 		
 		/**
 		 * generateResults will compare all genes associated with or input in the inputboxes by the user.
 		 * The size of the array that is returned depends on the amount of genes left at the end of the comparison,
 		 * and the operator that is used.
-		 * @return a multi-dimensional array where String[x] is a gene and String[][x] is an input.
+		 * @param oA Single-dimensional list of genes from the A input
+		 * @param oB Multi-dimensional list of genes from the B input(s)
+		 * @param operator Operator to use.
+		 * @return a multi-dimensional array where String[x][] is a gene and String[][x] is an input.
 		 */
 		public void generateResults(ArrayList<String> oA, ArrayList<ArrayList<String>> oB, int operator) {
 			String[][] outArray = null;
@@ -1585,6 +1996,65 @@ class input extends Gui {
 			}
 		}
 
+		/**
+		 * This method will retrieve the genes associated with an hpo number input by the user
+		 * and passes it to generateResults(ArrayList<String> ArrayList<ArrayList<String>>, int).
+		 * @param inputs the userinputs available
+		 */
+		public void generateResults(ArrayList<userinput> inputs) {
+			ArrayList<String> oA = new ArrayList<String>();
+			ArrayList<ArrayList<String>> oB = new ArrayList<ArrayList<String>>();
+			String txt;
+			int type;
+			
+			for (userinput input : inputs) {
+				if (input.getInputGroup() == 0) {
+					txt = input.getInputText();
+					type = input.getInputType();
+					if (type == 0) {
+						setInputError("Input A is invalid!");
+						return;
+					}else if (type == 1||type == 2) {
+						
+						HPODATA.findHPOGenes(txt, oA);
+					}else if (type == 3) {
+						HPODATA.parseUniqueGene(txt, oA);
+					}else if (type == 4) {
+						HPODATA.findHPOGenes(HPODATA.parseNumbersAsHPO(txt), oA, true);
+					}
+				}else{
+					oB.add(new ArrayList<String>());
+					txt = input.getInputText();
+					type = input.getInputType();
+					if (type == 0) {
+						setInputError("One of the B inputs is invalid!");
+						return;
+					}else if (type == 1||type == 2) {
+						HPODATA.findHPOGenes(txt, oB.get(oB.size()-1));
+					}else if (type == 3) {
+						HPODATA.parseUniqueGene(txt, oB.get(oB.size()-1));
+					}else if (type == 4) {
+						HPODATA.findHPOGenes(HPODATA.parseNumbersAsHPO(txt), oB.get(oB.size()-1), true);
+					}
+				}
+			}
+			generateResults(oA, oB, getOperator());
+		}
+		
+		/**
+		 * This method will pass a list of genes associated with a given
+		 * hpo number to generateResults(ArrayList<String> ArrayList<ArrayList<String>>, int)
+		 * @param hpo a specific, valid hpo number.
+		 */
+		public void generateResults(String hpo) {
+			ArrayList<ArrayList<String>> oB = new ArrayList<ArrayList<String>>();
+			for (String hpon : hpo.split("(,)")) {
+				oB.add(new ArrayList<String>());
+				HPODATA.findHPOGenes(hpon, oB.get(oB.size()-1),true);
+			}
+			generateResults(null, oB, LIST);
+		}
+		
 		public void getHeaders(ArrayList<userinput> inputs) {
 			getHeaders(inputs, getOperator());
 		}
@@ -1716,115 +2186,359 @@ class input extends Gui {
 			}
 			showResults(results, headers);
 		}*/
-		
-		public void generate(ArrayList<userinput> in) {
-			headers = null;
-			results = null;
-			getHeaders(in);
-			generateResults(in);
-			if (results == null) {
-				new Error(getInputError(), "Result error", JFrame.DISPOSE_ON_CLOSE);
-				return;
-			}
-			showResults(results, headers);
-		}
-		
-		public void generate(String hpo) {
-			headers = null;
-			results = null;
-			headers = hpo.split("(,)");
-			for (int i = 0; i < headers.length; i++) {
-				headers[i] = headers[i]+" - "+HPODATA.getPhenotypeFromHPO(headers[i]);
-			}
-			generateResults(hpo);
-			if (results == null) {
-				new Error(getInputError(), "Result error", JFrame.DISPOSE_ON_CLOSE);
-				return;
-			}
-			showResults(results, headers);
-		}
 
+		/**
+		 * This function displays the results passed by results and headers
+		 * @param results the results in the form of a two-dimensional string array
+		 * @param headers the headers in the form of a string array
+		 */
+		public void showResults(String[][] results, String[] headers) {
+			reswindow = new JFrame("Results");
+			restable = new JTable(results, headers);
+			if (headers.length > 5) {
+				restable.setAutoResizeMode(JTable.AUTO_RESIZE_OFF);
+			}
+			respanelsp = new JScrollPane(restable);
+			menubar = new JMenuBar();
+			filemenu = new JMenu("File");
+			export = new JMenuItem("Export to file...");
+			export.addActionListener(this);
+			export.setActionCommand("export");
+			reswindow.setDefaultCloseOperation(WindowConstants.DISPOSE_ON_CLOSE);
+			reswindow.setPreferredSize(parentWindow.getSize());
+			reswindow.setJMenuBar(menubar);
+			menubar.add(filemenu);
+			filemenu.add(export);
+			reswindow.add(respanelsp);
+			reswindow.pack();
+			reswindow.setLocationRelativeTo(null);
+			reswindow.setVisible(true);
+		}
+	}
+	
+	/**
+	 * The userinput class takes care of the user's input, including
+	 * parsing the type of input, 
+	 */
+	class userinput implements DocumentListener, HyperlinkListener {
+		private JTextArea inputbox;
+		private JEditorPane infobox;
+		private JScrollPane inputjsp;
+		private JScrollPane infojsp;
+		private Document inputdoc;
+		private int group;
+		private int id;
+		
+		userinput(int assignedgroup) {
+			id = getInputCount();
+			group = assignedgroup;
+			inputbox = new JTextArea();
+			inputdoc = inputbox.getDocument();
+			inputjsp = new JScrollPane(inputbox,
+					ScrollPaneConstants.VERTICAL_SCROLLBAR_AS_NEEDED,
+					ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
+			inputjsp.setPreferredSize(new Dimension(
+					parentContainer.getWidth()-10, DeltaGene.INPUTH));
+			inputdoc.addDocumentListener(this); 
+			inputbox.setFocusTraversalKeysEnabled(false);
+			infobox = new JEditorPane();
+			infobox.setContentType("text/html");
+			infobox.addHyperlinkListener(this);
+			infobox.setBackground(Color.getHSBColor(0, 0, 
+					(float)0.9));
+			infojsp = new JScrollPane(infobox, 
+					ScrollPaneConstants.VERTICAL_SCROLLBAR_AS_NEEDED, 
+					ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
+			infojsp.setPreferredSize(new Dimension(
+					parentContainer.getWidth()-10, DeltaGene.INFOH));
+			infobox.setEditable(false);
+			parentContainer.add(inputjsp);
+			parentContainer.add(infojsp);
+			ac.add(this);
+			updateInfoBox();
+		}
+		
 		@Override
-		public void actionPerformed(ActionEvent ae) {
-			if (ae.getActionCommand().equals("export")) {
-				try {
-					/**
-					 * This override of the approveSelection method of the JFileChooser class
-					 * will ask the user whether they want to overwrite the
-					 * selected file if it exists.
-					 */
-					JFileChooser filechooser = new JFileChooser() {
-						private static final long serialVersionUID = 1L;
+		public void changedUpdate(DocumentEvent e) {}
+		
+		// clears the inputbox of text
+		public void clear() {
+			inputbox.setText("");
+		}
 
-						@Override
-						public void approveSelection() {
-							File f = getSelectedFile();
-							if (f.exists()&&getDialogType() == SAVE_DIALOG&&f.toString().toLowerCase().endsWith(".csv")) {
-								int result = JOptionPane.showConfirmDialog(this,
-										"Would you like to overwrite the existing file?",
-										"Confirm overwrite", JOptionPane.YES_NO_CANCEL_OPTION);
-								switch (result) {
-									case JOptionPane.YES_OPTION:
-										super.approveSelection();
-										break;
-									case JOptionPane.NO_OPTION:
-										break;
-									case JOptionPane.CANCEL_OPTION:
-										break;
-									case JOptionPane.CLOSED_OPTION:
-										break;
-								}
-							}else{
-								super.approveSelection();
-							}
-						}
-					};
-					File file;
-					String newline = System.getProperty("line.separator");
-					int res = filechooser.showSaveDialog(reswindow);
-					if (res == JFileChooser.APPROVE_OPTION) {
-						file = filechooser.getSelectedFile();
-						if (!file.toString().toLowerCase().endsWith(".csv")) {
-							file = new File(file.getAbsolutePath()+".csv");
-						}
-						if (!file.createNewFile()) {
-							file.delete();
-							if (!file.createNewFile()) {
-								new Error("Could not create export file.", "Export error", JFrame.DISPOSE_ON_CLOSE);
-								return;
-							}
-						}
-						FileWriter outfile = new FileWriter(file);
-						for (int i = 0; i < headers.length; i++) {
-							outfile.append(headers[i]+" - "+HPODATA.getPhenotypeFromHPO(headers[i]));
-							if (i < headers.length-1) {
-								outfile.append(",");
-							}
-						}
-						outfile.append(newline);
-						for (String[] resultsy : results) {
-							for (int i = 0; i < resultsy.length; i++) {
-								outfile.append(resultsy[i]);
-								if (i < resultsy.length-1) {
-									outfile.append(",");
-								}
-							}
-							outfile.append(newline);
-						}
-						outfile.close();
-					}else if (res == JFileChooser.ERROR_OPTION) {
-						new Error("An error occurred when choosing an export file", "Export error", JFrame.DISPOSE_ON_CLOSE);
-						return;
-					}
-				}catch (IOException e) {
-					e.printStackTrace();
+		// gets the document associated with the inputbox
+		public Document getDocument() {
+			return inputdoc;
+		}
+		
+		int getID() {
+			return id;
+		}
+		
+		JEditorPane getInfoBox() {
+			return infobox;
+		}
+		
+		/**
+		 * returns the infoboxes' JScrollpane. used in removing an input
+		 * @return the infoboxes' JScrollPane
+		 */
+		public JScrollPane getInfoScrollPane() {
+			return infojsp;
+		}
+		
+		JTextArea getInputBox() {
+			return inputbox;
+		}
+		
+		/**
+		 * Returns the location of the inputbox relative
+		 * to the screen
+		 * @return location of this input's inputbox relative to the scren
+		 */
+		public Point getInputBoxLocationOnScreen() {
+			return inputbox.getLocationOnScreen();
+		}
+		
+		int getInputGroup() {
+			return group;
+		}
+		
+		/**
+		 * returns the inputscrollpane. used in removing an input
+		 * @return the inputboxes' JScrollPane
+		 */
+		public JScrollPane getInputScrollPane() {
+			return inputjsp;
+		}
+		
+		String getInputText () {
+			return inputbox.getText();
+		}
+		
+		/**
+		 * Returns the type of input in the inputbox.
+		 * <p>
+		 * <ol start=0>
+		 * <li>List of hpo numbers</li>
+		 * <li>Single hpo number</li>
+		 * <li>Gene symbols</li>
+		 * <li>Digits</li>
+		 * <li>Mixed input</li>
+		 * <li>invalid</li>
+		 * </ol>
+		 * </p>
+		 * @return An int signifying the type of input
+		 */
+		int getInputType() {
+			String in = getInputText();
+			/*
+			 * The first if checks if HP: occurs at all, in which case 
+			 * an HPO number is assumed to be the input. The second if
+			 * checks if any other instances of HP: occur after the 
+			 * first, which signifies a list of HPO numbers.*/
+			if (in.toUpperCase().indexOf("HP:") > -1) {
+				if (in.toUpperCase().substring(in.toUpperCase().
+						indexOf("HP:")+1).contains("HP:")) { 
+					return 1;
+				}else{
+					return 2;
 				}
+			}
+			// split lines by newline and whitespace
+			String[] lines = in.split("[\\n\\s]"); 
+			for (String line : lines) {
+				// any lowercase characters indicate no genelist or HPO num
+				if (line.matches("[a-z]")) { 
+					return 0;
+					
+					/* if the line starts with a capital letter
+					 * and has a mixture of capital letters and numbers
+					 * thereafter, return list of genes */
+				}if (line.matches("[A-Z][A-Z0-9]+")) {
+					return 3;
+					// if the line contains only digits, return digits
+				}if (line.matches("[\\d]+")) {
+					return 4;
+				}
+			}
+			// if all else fails, return invalid
+			return 0;
+		}
+		
+		// returns the size of this inputs' inputbox
+		Dimension getSize() {
+			return inputbox.getSize();
+		}
+
+		/**
+		 * When a link in an infobox is clicked, this will activate an
+		 * appropriate action based on it's prefix.
+		 * <ul>
+		 * <li>genes: List genes in table</li>
+		 * <li>tree: Show HPO term in hpo browser</li>
+		 * </ul>
+		 */
+		@Override
+		public void hyperlinkUpdate(HyperlinkEvent e) {
+			if (e.getEventType() == HyperlinkEvent.EventType.ACTIVATED) {
+				String desc = e.getDescription();
+				if (desc.contains("genes:")) {
+					resultobject.generate(desc.substring(6));
+				}else if (desc.contains("tree:")) {
+					HPODATA.browser.showHPOHeirarchy(desc.substring(5), HPODATA);
+				}else if (desc.equals("hpogenes")) {
+					HPODATA.browser.showGenesUnderHPO(desc.substring(8), HPODATA);
+				}
+			}
+		}
+		
+		/**
+		 *  This updates the infobox with information on the user's input 
+		 */
+		@Override
+		public void insertUpdate(DocumentEvent e) {
+			updateInfoBox(getInputType());
+		}
+		/**
+		 * This makes a list of genes in this inputbox unique, removing
+		 * any duplicate genes.
+		 */
+		public void makeGenelistUnique() {
+			if (getInputType() == 3) {
+				StringBuilder sb = new StringBuilder();
+				String[] in = getInputText().split("([^A-Z0-9\\-]+)");
+				HashSet<String> out = new HashSet<String>();
+				for (String gene : in) {
+					if (!out.contains(gene)) {
+						out.add(gene);
+						sb.append(gene);
+						sb.append(System.lineSeparator());
+					}
+				}
+				setInputText(sb.toString());
+			}
+		}
+		
+		/**
+		 * @see insertUpdate
+		 */
+		@Override
+		public void removeUpdate(DocumentEvent e) {
+			insertUpdate(e);
+		}
+
+		void setInputGroup(int newgroup) {
+			group = newgroup;
+		}
+		
+		
+		void setInputInfo(String text) {
+			infobox.setText(text);
+		}
+		
+		void setInputText(String text) {
+			inputbox.setText(text);
+		}
+		/**
+		 * Updates the infobox based upon the type of input in the
+		 * inputbox.
+		 */
+		public void updateInfoBox() {
+			updateInfoBox(getInputType());
+		}
+		
+		/**
+		 * Updates the infobox based upon a particular type
+		 * @param type the type to assume
+		 */
+		public void updateInfoBox(int type) {
+			String pheno;
+			StringBuilder sb = new StringBuilder();
+			switch(type) {
+			case 0:		
+				setInputInfo("Type Genes, HPO number, "
+						+ "or start typing a phenotype in the field.");
+				break;
+			case 1:
+				sb.append("Type: List of HPO numbers:");
+				String[] hponums = getInputText().toUpperCase()
+						.split("([^A-Z0-9:]+)");
+				for (String hpo : hponums) {
+					pheno = HPODATA.getPhenotypeFromHPO(hpo);
+					if (pheno == null) {
+						sb.append("<br>"+hpo+" - "
+								+ "No associated phenotype.");
+					}else{
+						/* 
+						 * When either of these links in the infobox is
+						 * clicked, hyperlinkUpdate takes action based upon
+						 * the tree: or genes:  prefix of a HPO number.
+						 * tree: lists the HPO numbers in the HPO browser
+						 * tree, genes: lists the genes associated with
+						 * this HPO number in a table
+						 */
+						sb.append("<br>"+hpo+" - "+pheno+". "
+								+ "<a href=\"genes:"+hpo+"\">List genes</a>"
+								+ " | <a href=\"tree:"+hpo
+								+"\">Show in browser</a>");
+					}
+				}
+				infobox.setText(sb.toString());
+				break;
+			case 2:
+				String text = getInputText().toUpperCase();
+				if (text.length() == 10) {
+					if (HPODATA.getPhenotypeFromHPO(text) != null) {
+						infobox.setText("Type: Single HPO number:<br>"
+					+text+" - "+HPODATA.getPhenotypeFromHPO(text)+
+					" (<a href=\"genes:"+text
+					+"\">List genes</a> | <a href=\"tree:"
+					+text+"\">Show in browser</a>)");
+					}else{
+						infobox.setText("Type: Single HPO number:<br>"+
+					text+" - no associated phenotype.");
+					}
+				}else{
+					infobox.setText("Type: Single HPO number:<br>"
+							+ "(Requires seven digits)");
+				}
+				break;
+			case 3:
+				infobox.setText("Type: List of genes. "
+						+ "<a href=\"findhpo\">Find HPO numbers associated "
+						+ "with genes</a>");
+				break;
+			case 4:
+				sb.append("Type: List of numbers (Parsed as HPO numbers):");
+				for (String hpo : HPODATA.parseNumbersAsHPO(
+						inputbox.getText())) {
+					if (hpo == null) {
+						hpo = "Invalid HPO number";
+					}
+					pheno = HPODATA.getPhenotypeFromHPO(hpo);
+					if (pheno != null) {
+						sb.append("<br>"+hpo+" - "+pheno
+								+" (<a href=\"genes:"+hpo
+								+"\">List genes</a> | <a href=\"tree:"
+								+hpo+"\">Show in browser</a>)");
+					}else{
+						sb.append("<br>"+hpo+" - Unknown phenotype.");
+					}
+				}
+				infobox.setText(sb.toString());
+				break;
+			default:	
+				infobox.setText("Invalid input");
+				break;
 			}
 		}
 	}
 	
-	//public String[] headers = new String[getMaxInputs()];
+	private static JFrame parentWindow;
+	private static Container parentContainer;
 	public static HPOObject HPODATA;
+	public static HPOFile HPOFILES;
 	public static ArrayList<userinput> inputs;
 	public static result resultobject;
 	Autocomplete ac;
@@ -1833,23 +2547,20 @@ class input extends Gui {
 	final static int NOT = 2;
 	final static int XOR = 3;
 	final static int LIST = 4;
+	public final static int STATE_INSTANTIATED = 0;
+	public final static int STATE_INIT = 1;
+	public final static int STATE_BUILDING = 2;
+	public final static int STATE_READY = 3;
 	private static int OPERATOR = DEFAULT;
 	private String error;
+	private int state = STATE_INSTANTIATED;
+	
 
-	public String getInputError() {
-		return error;
-	}
-	
-	public void setInputError(String errmsg) {
-		error = errmsg;
-	}
-	
-	int getOperator() {
-		return OPERATOR;
-	}
-	
-	public void setOperator (int op){
-		OPERATOR = op;
+	Input(String aArg, String bArg, String e, String fh, String fa, boolean enableGui, boolean verbose) {
+		inputs = new ArrayList<userinput>();
+		resultobject = new result();
+		HPOFILES = new HPOFile();
+		HPODATA = new HPOObject(HPOFILES);
 	}
 	
 	void addInput(int count, int assignedgroup) {
@@ -1859,31 +2570,19 @@ class input extends Gui {
 			resizeInputContainer();
 		}
 	}
-	
-	void removeInput() {
-		int last = inputs.size()-1;
-		if (last > 1) {
-			inputcontainer.remove(inputs.get(last).getInputBox());
-			inputcontainer.remove(inputs.get(last).getInputScrollPane());
-			inputcontainer.remove(inputs.get(last).getInfoBox());
-			inputcontainer.remove(inputs.get(last).getInfoScrollPane());
-			inputs.remove(inputs.size()-1);
-			resizeInputContainer();
-		}
-	}
-	
+
 	/**
-	 * This function returns an integer which signifies the type of input
-	 * the user has typed into the input box.
-	 * <ol>
-	 * <li>List of HPO numbers</li>
-	 * <li>Single HPO number</li>
-	 * <li>List of genes</li>
-	 * <li>Digits to be parsed as HPO number</li>
-	 * </ol>
-	 * @param in the user's input to be parsed.
-	 * @return an integer signifying the input type, 0 if unrecognized input.
+	 * This function is called when an input is added or removed, and resizes 
+	 * the input container accordingly.
 	 */
+	public void resizeInputContainer() {
+		parentContainer.setPreferredSize(
+				new Dimension((parentWindow.getContentPane().getWidth()-50),
+						(DeltaGene.INPUTH+DeltaGene.INFOH+(DeltaGene.INPUTPAD*2))*getInputCount()));
+		parentWindow.pack();
+		parentWindow.revalidate();
+		parentWindow.repaint();
+	}
 	
 	public void clearInputs() {
 		for (userinput input : inputs) {
@@ -1896,17 +2595,9 @@ class input extends Gui {
 			input.makeGenelistUnique();
 		}
 	}
-
-	public void getResults() {
-		resultobject.generate(inputs);
-	}
 	
-	int getInputCount() {
-		return inputs.size();
-	}
-	
-	String getInputText(int index) {
-		return inputs.get(index).getInputText();
+	public HPOObject getData() {
+		return HPODATA;
 	}
 	
 	userinput getDocumentInputObject(Document doc) {
@@ -1918,6 +2609,10 @@ class input extends Gui {
 		return null;
 	}
 	
+	HPOFile getFilesObject() {
+		return HPOFILES;
+	}
+	
 	userinput getInputboxObject(JTextArea ta) {
 		for (userinput input : inputs) {
 			if (input.getInputBox().equals(ta)) {
@@ -1927,17 +2622,130 @@ class input extends Gui {
 		return null;
 	}
 	
-	public void initialize(File hpofile, File assocfile) {
-		HPODATA = new HPOObject(hpofile, assocfile);
-		ac = new Autocomplete(HPODATA.getPhenosList());
+	int getInputCount() {
+		return inputs.size();
 	}
 
-	public HPOObject getData() {
-		return HPODATA;
+	public String getInputError() {
+		return error;
+	}
+	
+	String getInputText(int index) {
+		return inputs.get(index).getInputText();
+	}
+	
+	int getOperator() {
+		return OPERATOR;
+	}
+	
+	public void getResults() {
+		resultobject.generate(inputs);
+	}
+	
+	public void initialize(JFrame pwindow, Container pcontainer) {
+		state = STATE_INIT;
+		parentWindow = pwindow;
+		parentContainer = pcontainer;
+		
+		/* start thread that keeps track of the download progress.
+		 * Swing is not thread safe, and i am sure this is a big no-no
+		 */
+		SwingWorker<Void, Void> updateWorker = new SwingWorker<Void,Void>() {
+			public Void doInBackground() {
+				try { 
+					while (!HPOFILES.isReady()) {
+						Thread.sleep(50);
+						parentWindow.setTitle("DeltaGene - Downloading HPO/Association files ("+HPOFILES.getDown()+"kB)");
+					}
+					while (!HPODATA.isReady()) {
+						if (HPODATA.getState() == HPOObject.STATE_LOAD_HPO) {
+							parentWindow.setTitle("DeltaGene - Building HPO Database...");
+						}else if (HPODATA.getState() == HPOObject.STATE_LOAD_ASSOC){
+							parentWindow.setTitle("DeltaGene - Loading gene associations...");
+						}
+						Thread.sleep(50);
+					}
+				}catch (InterruptedException e) {
+					/* May mess up the window title, but should not 
+					 * do much else
+					 */
+					new Error(Error.UNDEF_ERROR, Error.UNDEF_ERROR_T, WindowConstants.DISPOSE_ON_CLOSE);
+					e.printStackTrace();
+				}
+				parentWindow.setTitle("DeltaGene");
+				return null;
+			}
+		};
+		updateWorker.execute();
+		
+		/* instantialte the autocompletion class with a future treemap
+		 * object. will be ready once the files have been downloaded 
+		 * and the HPO database has been built.
+		 */
+		ac = new Autocomplete(DeltaGene.THREADPOOL.submit(new Callable<TreeMap<String,String>>() {
+			public TreeMap<String,String> call () {
+				try {
+					// While the future object is not yet available, wait
+					while (HPODATA.getState() < HPOObject.STATE_LOAD_ASSOC) {
+						Thread.sleep(100);
+					}
+					/* When done loading, check if user has prompted the
+					 * autocomplete window. if so, will call an insertUpdate()
+					 * event on the input the user has started typing in with
+					 * a null event. see input.Autocomplete.insertUpdate()
+					 */
+					if (ac.isVisible()) {
+						SwingWorker<Void, Void> refreshWorker = 
+								new SwingWorker<Void,Void>() {
+							public Void doInBackground() {
+								ac.insertUpdate(null);
+								return null;
+							}
+						};
+						/* call this on a seperate thread so the gui doesn't
+						 * block
+						 */
+						refreshWorker.execute();
+					}
+					// return the promised object once it's ready
+					return HPODATA.getACList();
+				}catch (InterruptedException e) {
+					e.printStackTrace();
+					return null;
+				}
+			}
+		}));
+		state = STATE_BUILDING;
+		HPOFILES.LoadFiles();
+		HPODATA.build(this);
+		state = STATE_READY;
+	}
+	
+	void removeInput() {
+		int last = inputs.size()-1;
+		if (last > 1) {
+			parentContainer.remove(inputs.get(last).getInputBox());
+			parentContainer.remove(inputs.get(last).getInputScrollPane());
+			parentContainer.remove(inputs.get(last).getInfoBox());
+			parentContainer.remove(inputs.get(last).getInfoScrollPane());
+			inputs.remove(inputs.size()-1);
+			resizeInputContainer();
+		}
 	}
 
-	input() {
-		inputs = new ArrayList<userinput>();
-		resultobject = new result();
+	public void setInputError(String errmsg) {
+		error = errmsg;
+	}
+
+	public void setOperator (int op){
+		OPERATOR = op;
+	}
+	
+	public boolean isReady() {
+		return state == STATE_READY;
+	}
+	
+	public int getState() {
+		return state;
 	}
 }
