@@ -51,7 +51,7 @@ class Autocomplete implements DocumentListener, ActionListener {
 		public void focusGained(FocusEvent e) {
 			if (acInvoker == null||!e.getComponent().equals(
 					acInvoker.getInputBox())) {
-				acInvoker = getInputboxObject((JTextArea)e.getSource());
+				//acInvoker = getInputboxObject((JTextArea)e.getSource());
 				acDropdownBox.setInvoker(acInvoker.getInputBox());
 			}
 		}

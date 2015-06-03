@@ -33,6 +33,7 @@
 
 package deltagene.input;
 
+import deltagene.gui.MainGui;
 import deltagene.input.data.HPODataHandler;
 import deltagene.io.HPOFileHandler;
 import deltagene.main.DeltaGene;
@@ -96,9 +97,10 @@ import javax.swing.WindowConstants;
  */
 public class InputHandler {
 	private static Container contentPane;
-	public HPODataHandler HPOData;
-	public HPOFileHandler HPOFiles;
+	public HPODataHandler hpoDataHandler;
+	public HPOFileHandler hpoFileHandler;
 	public static ArrayList<UserInput> inputs;
+	public MainGui gui;
 	//public static result resultobject;
 	Autocomplete ac;
 	public final static int DEFAULT = 0;
@@ -116,40 +118,36 @@ public class InputHandler {
 	private int state = STATE_INSTANTIATED;
 	
 
-	public InputHandler(String aArg, String bArg, String e, String fh, String fa, JPanel contentPane, boolean verbose) {
-		if (contentPane != null)
-			this.contentPane = contentPane;
+	public InputHandler(String aArg, String bArg, String e, String fh, String fa, MainGui gui, boolean verbose) {
+		if (gui != null)
+		{
+			this.gui = gui;
+			this.contentPane = this.gui.getContentPanel();
+		}
 		inputs = new ArrayList<UserInput>();
 	//	resultobject = new result();
-		HPOFiles = new HPOFileHandler();
-		HPOData = new HPODataHandler(HPOFiles);
+		hpoFileHandler = new HPOFileHandler();
+		hpoDataHandler = new HPODataHandler(hpoFileHandler);
+		DeltaGene.THREADPOOL.submit(new Runnable() {
+			@Override
+			public void run() {
+				
+			}
+		});
 	}
 	
 	// this constructor is called by the gui
-	public InputHandler(JPanel contentPane)
+	public InputHandler(MainGui gui)
 	{
-		this(null, null, null, null, null, contentPane, false);
+		this(null, null, null, null, null, gui, false);
 	}
 	
 	public void addInput(int count, int assignedgroup) {
 		for(int i = 0; i < count; i++) {
-			UserInput input = new UserInput(assignedgroup, this, HPOData);
+			UserInput input = new UserInput(assignedgroup, this, hpoDataHandler);
 			inputs.add(input);
-			resizeInputContainer();
+			gui.addInput(input);
 		}
-	}
-
-	/**
-	 * This function is called when an input is added or removed, and resizes 
-	 * the input container accordingly.
-	 */
-	public void resizeInputContainer() {
-		parentContainer.setPreferredSize(
-				new Dimension((parentWindow.getContentPane().getWidth()-50),
-						(DeltaGene.INPUTH+DeltaGene.INFOH+(DeltaGene.INPUTPAD*2))*getInputCount()));
-		parentWindow.pack();
-		parentWindow.revalidate();
-		parentWindow.repaint();
 	}
 	
 	public void clearInputs() {
@@ -164,8 +162,12 @@ public class InputHandler {
 		}
 	}
 	
-	public HPODataHandler getData() {
-		return HPOData;
+	public HPODataHandler getDataHandler() {
+		return hpoDataHandler;
+	}
+	
+	public HPOFileHandler getFileHandler() {
+		return hpoFileHandler;
 	}
 	
 	UserInput getDocumentInputObject(Document doc) {
@@ -175,10 +177,6 @@ public class InputHandler {
 			}
 		}
 		return null;
-	}
-	
-	HPOFileHandler getFileHandler() {
-		return HPOFiles;
 	}
 	
 	UserInput getInputboxObject(JTextArea ta) {
@@ -214,43 +212,13 @@ public class InputHandler {
 			//resultobject.generate(inputs);
 	}
 	
-	public void initialize(JFrame pwindow, Container pcontainer) {
+	public void initialize(MainGui gui) {
 		state = STATE_INIT;
-		parentWindow = pwindow;
-		parentContainer = pcontainer;
 		
-		/* start thread that keeps track of the download progress.
-		 * Swing is not thread safe, and i am sure this is a big no-no
-		 */
-		SwingWorker<Void, Void> updateWorker = new SwingWorker<Void,Void>() {
-			public Void doInBackground() {
-				try { 
-					while (!HPOFiles.isReady()) {
-						Thread.sleep(50);
-						parentWindow.setTitle("DeltaGene - Downloading HPO/Association files ("+HPOFiles.getDown()+"kB)");
-					}
-					while (!HPOData.isReady()) {
-						if (HPOData.getState() == HPOData.STATE_LOAD_HPO) {
-							parentWindow.setTitle("DeltaGene - Building HPO Database...");
-						}else if (HPOData.getState() == HPOData.STATE_LOAD_ASSOC){
-							parentWindow.setTitle("DeltaGene - Loading gene associations...");
-						}
-						Thread.sleep(50);
-					}
-				}catch (InterruptedException e) {
-					/* May mess up the window title, but should not 
-					 * do much else
-					 */
-					new Error(Error.UNDEF_ERROR, Error.UNDEF_ERROR_T, WindowConstants.DISPOSE_ON_CLOSE);
-					e.printStackTrace();
-				}
-				parentWindow.setTitle("DeltaGene");
-				return null;
-			}
-		};
-		updateWorker.execute();
+		// start thread that keeps track of the download progress.
+		gui.startDownload();
 		
-		/* instantialte the autocompletion class with a future treemap
+		/* instantiate the autocompletion class with a future treemap
 		 * object. will be ready once the files have been downloaded 
 		 * and the HPO database has been built.
 		 */
@@ -258,7 +226,7 @@ public class InputHandler {
 			public TreeMap<String,String> call () {
 				try {
 					// While the future object is not yet available, wait
-					while (HPOData.getState() < HPOData.STATE_LOAD_ASSOC) {
+					while (hpoDataHandler.getState() < hpoDataHandler.STATE_LOAD_ASSOC) {
 						Thread.sleep(100);
 					}
 					/* When done loading, check if user has prompted the
@@ -280,7 +248,7 @@ public class InputHandler {
 						refreshWorker.execute();
 					}
 					// return the promised object once it's ready
-					return HPOData.getACList();
+					return hpoDataHandler.getACList();
 				}catch (InterruptedException e) {
 					e.printStackTrace();
 					return null;
@@ -288,20 +256,16 @@ public class InputHandler {
 			}
 		}));
 		state = STATE_BUILDING;
-		HPOFiles.LoadFiles();
-		HPOData.build(this);
+		hpoFileHandler.LoadFiles();
+		hpoDataHandler.build(this);
 		state = STATE_READY;
 	}
 	
 	public void removeInput() {
 		int last = inputs.size()-1;
 		if (last > 1) {
-			parentContainer.remove(inputs.get(last).getInputBox());
-			parentContainer.remove(inputs.get(last).getInputScrollPane());
-			parentContainer.remove(inputs.get(last).getInfoBox());
-			parentContainer.remove(inputs.get(last).getInfoScrollPane());
+			gui.removeInput(inputs.get(last));
 			inputs.remove(inputs.size()-1);
-			resizeInputContainer();
 		}
 	}
 

@@ -36,7 +36,9 @@ package deltagene.gui;
 import deltagene.utils.Error;
 import deltagene.utils.Help;
 import deltagene.input.InputHandler;
+import deltagene.input.UserInput;
 import deltagene.input.data.HPODataHandler;
+import deltagene.io.HPOFileHandler;
 import deltagene.main.DeltaGene;
 
 import java.awt.Button;
@@ -62,6 +64,7 @@ import javax.swing.JMenuItem;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.SpringLayout;
+import javax.swing.SwingUtilities;
 import javax.swing.SwingWorker;
 import javax.swing.WindowConstants;
 
@@ -81,15 +84,19 @@ public class MainGui extends AbstractWindow implements ActionListener, ItemListe
 	// the constructor class builds the main window and adds the inputs
 	public MainGui () {
 		super("DeltaGene",null, 800, 600, true, true);
-		DeltaGene.THREADPOOL.submit(new Runnable() {
-			@Override
-			public void run() {
-				inputInstance = new InputHandler(null, null, null, null, null, getContentPanel(), false);				
-			}
-		});
+		inputInstance = new InputHandler(null, null, null, null, null, this, false);
 		addMenus();
 		addControls();
-		addInputs();
+	}
+	
+	public void addInput (UserInput input) {
+		getContentPanel().add(input);
+	}
+	
+	public boolean removeInput(UserInput input) {
+		input.removeAll();
+		getContentPanel().remove(input);
+		return true;
 	}
 	
 	/**
@@ -177,11 +184,6 @@ public class MainGui extends AbstractWindow implements ActionListener, ItemListe
 		getControlPanel().add(operandSelectionBox);
 		getControlPanel().setBorder(BorderFactory.createDashedBorder(Color.gray));
 	}
-	
-	private void addInputs()
-	{
-		
-	}
 
 	/* 
 	 * (non-Javadoc) 
@@ -236,7 +238,7 @@ public class MainGui extends AbstractWindow implements ActionListener, ItemListe
 			DeltaGene.THREADPOOL.submit(new Runnable() {
 				@Override
 				public void run() {
-					while (inputInstance.getData().getState() < HPODataHandler.STATE_LOAD_ASSOC) {
+					while (inputInstance.getDataHandler().getState() < HPODataHandler.STATE_LOAD_ASSOC) {
 						try {
 							Thread.sleep(50);
 						} catch (InterruptedException e) {
@@ -245,8 +247,8 @@ public class MainGui extends AbstractWindow implements ActionListener, ItemListe
 							e.printStackTrace();
 						}
 					}
-					inputInstance.getData().getBrowser().showHPOHeirarchy("HP:0000001",
-							inputInstance.getData());
+					inputInstance.getDataHandler().getBrowser().showHPOHeirarchy("HP:0000001",
+							inputInstance.getDataHandler());
 				}
 			});
 		}if (e.getActionCommand().equals("about")) {
@@ -254,5 +256,32 @@ public class MainGui extends AbstractWindow implements ActionListener, ItemListe
 		}if (e.getActionCommand().equals("exit")) {
 			System.exit(0);
 		}
+	}
+
+	public void startDownload() {
+		final InputHandler inputInstance = this.inputInstance;
+		SwingUtilities.invokeLater(new Runnable() {
+			@Override
+			public void run() {
+				try {
+					while (inputInstance.getFileHandler().getState() < HPOFileHandler.STATE_READY) {
+						Thread.sleep(5);
+						switch (inputInstance.getFileHandler().getState()) {
+							case HPOFileHandler.STATE_DOWNLOAD_HPO:
+								setTitle("DeltaGene - Downloading HPO File - "+inputInstance.getFileHandler().getDown());
+							case HPOFileHandler.STATE_DOWNLOAD_ASSOC:
+								setTitle("DeltaGene - Downloading association File - "+inputInstance.getFileHandler().getDown());
+						}
+					}
+					setTitle("DeltaGene - Building HPO data");
+					while (inputInstance.getDataHandler().getState() < HPODataHandler.STATE_READY) {
+						Thread.sleep(5);
+					}
+					setTitle("DeltaGene - Ready");
+				}catch (InterruptedException e) {
+					new Error(Error.UNDEF_ERROR, Error.UNDEF_ERROR_T, DO_NOTHING_ON_CLOSE);
+				}
+			}
+		});	
 	}
 }

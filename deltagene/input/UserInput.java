@@ -44,7 +44,7 @@ public class UserInput extends Container implements DocumentListener, HyperlinkL
 	private InputHandler input;
 	private HPODataHandler data;
 	
-	UserInput(int assignedgroup, InputHandler input, HPODataHandler data) {
+	public UserInput(int assignedgroup, InputHandler input, HPODataHandler data) {
 		this.input = input;
 		this.data = data;
 		id = input.getInputCount();
