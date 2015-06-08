@@ -125,7 +125,6 @@ public class InputHandler {
 			this.contentPane = this.gui.getContentPanel();
 		}
 		inputs = new ArrayList<UserInput>();
-	//	resultobject = new result();
 		hpoFileHandler = new HPOFileHandler();
 		hpoDataHandler = new HPODataHandler(hpoFileHandler);
 		DeltaGene.THREADPOOL.submit(new Runnable() {
@@ -140,14 +139,6 @@ public class InputHandler {
 	public InputHandler(MainGui gui)
 	{
 		this(null, null, null, null, null, gui, false);
-	}
-	
-	public void addInput(int count, int assignedgroup) {
-		for(int i = 0; i < count; i++) {
-			UserInput input = new UserInput(assignedgroup, this, hpoDataHandler);
-			inputs.add(input);
-			gui.addInput(input);
-		}
 	}
 	
 	public void clearInputs() {
@@ -261,12 +252,9 @@ public class InputHandler {
 		state = STATE_READY;
 	}
 	
-	public void removeInput() {
-		int last = inputs.size()-1;
-		if (last > 1) {
-			gui.removeInput(inputs.get(last));
-			inputs.remove(inputs.size()-1);
-		}
+	public void removeInput(UserInput input) {
+		inputs.remove(input);
+		ac.remove(input);
 	}
 
 	public void setInputError(String errmsg) {
@@ -283,5 +271,25 @@ public class InputHandler {
 	
 	public int getState() {
 		return state;
+	}
+
+	public void addInput(int group) {
+		UserInput input = new UserInput(group, this);
+		inputs.add(input);
+		gui.getContentPanel().add(input);
+		//ac.add(input);
+		gui.revalidate();
+		gui.repaint();
+	}
+
+	public void removeLastInput() {
+		if (inputs.size() == 2)
+			return;
+		UserInput input = inputs.get(inputs.size()-1);
+		inputs.remove(input);
+		gui.getContentPanel().remove(input);
+		//ac.remove(input);
+		gui.revalidate();
+		gui.repaint();
 	}
 }

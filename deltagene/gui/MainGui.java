@@ -58,6 +58,7 @@ import javax.swing.BoxLayout;
 import javax.swing.ImageIcon;
 import javax.swing.JComboBox;
 import javax.swing.JFrame;
+import javax.swing.JLabel;
 import javax.swing.JMenu;
 import javax.swing.JMenuBar;
 import javax.swing.JMenuItem;
@@ -79,24 +80,17 @@ public class MainGui extends AbstractWindow implements ActionListener, ItemListe
 	public int down;
 	public boolean downloading = true;
 	private InputHandler inputInstance;
-	//JMenuItem browserMenuItem;
 	
 	// the constructor class builds the main window and adds the inputs
 	public MainGui () {
 		super("DeltaGene",null, 800, 600, true, true);
 		inputInstance = new InputHandler(null, null, null, null, null, this, false);
+		this.setMinimumSize(new Dimension(500,500));
 		addMenus();
 		addControls();
-	}
-	
-	public void addInput (UserInput input) {
-		getContentPanel().add(input);
-	}
-	
-	public boolean removeInput(UserInput input) {
-		input.removeAll();
-		getContentPanel().remove(input);
-		return true;
+		getContentPanel().setLayout(new BoxLayout(getContentPanel(), BoxLayout.PAGE_AXIS));
+		inputInstance.addInput(0);
+		inputInstance.addInput(1);
 	}
 	
 	/**
@@ -173,12 +167,12 @@ public class MainGui extends AbstractWindow implements ActionListener, ItemListe
 		
 		addButton.addActionListener(this);
 		addButton.setActionCommand("add");
-		addButton.setEnabled(false);
+		addButton.setEnabled(true);
 		getControlPanel().add(addButton);
 		
 		removeButton.addActionListener(this);
 		removeButton.setActionCommand("rem");
-		removeButton.setEnabled(false);
+		removeButton.setEnabled(true);
 		getControlPanel().add(removeButton);
 		operandSelectionBox.addItemListener(this);
 		getControlPanel().add(operandSelectionBox);
@@ -227,9 +221,9 @@ public class MainGui extends AbstractWindow implements ActionListener, ItemListe
 		}if (e.getActionCommand().equals("clear")) {
 			inputInstance.clearInputs();
 		}if (e.getActionCommand().equals("add")) {
-			inputInstance.addInput(1,1);
+			inputInstance.addInput(1);
 		}if (e.getActionCommand().equals("rem")) {
-			inputInstance.removeInput();
+			inputInstance.removeLastInput();
 		}if (e.getActionCommand().equals("format")) {
 			inputInstance.formatGenes();
 		}if (e.getActionCommand().equals("help")) {

@@ -4,11 +4,15 @@ import java.awt.Color;
 import java.awt.Component;
 import java.awt.Container;
 import java.awt.Dimension;
+import java.awt.GridBagConstraints;
+import java.awt.GridBagLayout;
 import java.awt.Point;
 import java.util.HashSet;
 
 import javax.activation.DataHandler;
+import javax.swing.BoxLayout;
 import javax.swing.JEditorPane;
+import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTextArea;
 import javax.swing.ScrollPaneConstants;
@@ -25,6 +29,10 @@ import javax.swing.text.Document;
 
 
 
+
+
+
+
 import deltagene.input.data.HPODataHandler;
 import deltagene.main.DeltaGene;
 
@@ -32,7 +40,7 @@ import deltagene.main.DeltaGene;
  * The userinput class takes care of the user's input, including
  * parsing the type of input, 
  */
-public class UserInput extends Container implements DocumentListener, HyperlinkListener {
+public class UserInput extends JPanel implements DocumentListener, HyperlinkListener {
 	private static final long serialVersionUID = 1L;
 	private JTextArea inputbox;
 	private JEditorPane infobox;
@@ -40,22 +48,19 @@ public class UserInput extends Container implements DocumentListener, HyperlinkL
 	private JScrollPane infojsp;
 	private Document inputdoc;
 	private int group;
-	private int id;
 	private InputHandler input;
 	private HPODataHandler data;
 	
-	public UserInput(int assignedgroup, InputHandler input, HPODataHandler data) {
+	public UserInput(int group, InputHandler input) {
 		this.input = input;
-		this.data = data;
-		id = input.getInputCount();
-		group = assignedgroup;
+		this.group = group;
+		data = input.getDataHandler();
 		inputbox = new JTextArea();
 		inputdoc = inputbox.getDocument();
 		inputjsp = new JScrollPane(inputbox,
 				ScrollPaneConstants.VERTICAL_SCROLLBAR_AS_NEEDED,
 				ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
-		inputjsp.setPreferredSize(new Dimension(
-				500, DeltaGene.INPUTH));
+		GridBagConstraints c = new GridBagConstraints();
 		inputdoc.addDocumentListener(this); 
 		inputbox.setFocusTraversalKeysEnabled(false);
 		infobox = new JEditorPane();
@@ -65,12 +70,18 @@ public class UserInput extends Container implements DocumentListener, HyperlinkL
 				(float)0.9));
 		infojsp = new JScrollPane(infobox, 
 				ScrollPaneConstants.VERTICAL_SCROLLBAR_AS_NEEDED, 
-				ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
-		infojsp.setPreferredSize(new Dimension(
-				500, DeltaGene.INFOH));
+				ScrollPaneConstants.HORIZONTAL_SCROLLBAR_AS_NEEDED);
 		infobox.setEditable(false);
-		this.add(inputjsp);
-		this.add(infojsp);
+		this.setPreferredSize(new Dimension(0,250));
+		this.setLayout(new GridBagLayout());
+		c.insets.bottom = 5;
+		c.fill = GridBagConstraints.BOTH;
+		c.gridx = 0; c.gridy = 0;
+		c.weightx = 1; c.weighty = 0.5;
+		this.add(inputjsp,c);
+		c.gridx = 0; c.gridy = 1;
+		c.weightx = 1; c.weighty = 0.5;
+		this.add(infojsp,c);
 		updateInfoBox();
 	}
 	
@@ -85,10 +96,6 @@ public class UserInput extends Container implements DocumentListener, HyperlinkL
 	// gets the document associated with the inputbox
 	public Document getDocument() {
 		return inputdoc;
-	}
-	
-	public int getID() {
-		return id;
 	}
 	
 	JEditorPane getInfoBox() {

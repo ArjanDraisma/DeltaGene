@@ -12,6 +12,7 @@ import deltagene.utils.DeltaGeneConstants;
 import javax.swing.JButton;
 import javax.swing.JFrame;
 import javax.swing.JPanel;
+import javax.swing.JScrollPane;
 
 /**
  * General gui class.
@@ -23,6 +24,7 @@ public abstract class AbstractWindow extends JFrame
 	private Container rootContainer;
 	private JPanel contentPanel;
 	private JPanel controlPanel;
+	private JScrollPane contentPanelScrollPane;
 	private GridBagLayout mgr;
 	
 	public AbstractWindow(String title, Component callingComponent, int width, int height, boolean controls, boolean show)
@@ -51,11 +53,15 @@ public abstract class AbstractWindow extends JFrame
 		}	
 		
 		contentPanel = new JPanel();
+		contentPanelScrollPane = new JScrollPane(contentPanel,
+				JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED,
+				JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+		
 		c.fill = GridBagConstraints.BOTH;
 		c.gridx = 0;
 		c.gridy = 1;
 		c.weightx = 1; c.weighty = 0.98;
-		getContentPane().add(contentPanel, c);
+		getContentPane().add(contentPanelScrollPane, c);
 		
 		pack();
 		setLocationRelativeTo(callingComponent);

@@ -152,6 +152,12 @@ class Autocomplete implements DocumentListener, ActionListener {
 		input.getInputBox().addKeyListener(keyHandlerInstance);
 	}
 	
+	public void remove(UserInput input) {
+		input.getDocument().removeDocumentListener(this);
+		input.getInputBox().removeFocusListener(keyHandlerInstance);
+		input.getInputBox().removeKeyListener(keyHandlerInstance);
+	}
+
 	// changedupdate is not used on plainDocuments, as used by
 	// JTextArea
 	@Override
