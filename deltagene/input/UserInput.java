@@ -8,6 +8,7 @@ import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.Point;
 import java.util.HashSet;
+import java.util.Stack;
 
 import javax.activation.DataHandler;
 import javax.swing.BoxLayout;
@@ -21,6 +22,8 @@ import javax.swing.event.DocumentListener;
 import javax.swing.event.HyperlinkEvent;
 import javax.swing.event.HyperlinkListener;
 import javax.swing.text.Document;
+
+
 
 
 
@@ -98,6 +101,10 @@ public class UserInput extends JPanel implements DocumentListener, HyperlinkList
 		return inputdoc;
 	}
 	
+	public int getID() {
+		return InputHandler.inputs.indexOf(this);
+	}
+	
 	JEditorPane getInfoBox() {
 		return infobox;
 	}
@@ -123,7 +130,12 @@ public class UserInput extends JPanel implements DocumentListener, HyperlinkList
 		return inputbox.getLocationOnScreen();
 	}
 	
-	int getInputGroup() {
+	// returns the size of this inputs' inputbox
+	Dimension getInputBoxSize() {
+		return inputbox.getSize();
+	}
+	
+	public int getInputGroup() {
 		return group;
 	}
 	
@@ -135,10 +147,10 @@ public class UserInput extends JPanel implements DocumentListener, HyperlinkList
 		return inputjsp;
 	}
 	
-	String getInputText () {
+	public String getInputText () {
 		return inputbox.getText();
 	}
-	
+
 	/**
 	 * Returns the type of input in the inputbox.
 	 * <p>
@@ -153,7 +165,7 @@ public class UserInput extends JPanel implements DocumentListener, HyperlinkList
 	 * </p>
 	 * @return An int signifying the type of input
 	 */
-	int getInputType() {
+	public int getInputType() {
 		String in = getInputText();
 		/*
 		 * The first if checks if HP: occurs at all, in which case 
@@ -189,11 +201,6 @@ public class UserInput extends JPanel implements DocumentListener, HyperlinkList
 		return 0;
 	}
 	
-	// returns the size of this inputs' inputbox
-	Dimension getInputBoxSize() {
-		return inputbox.getSize();
-	}
-
 	/**
 	 * When a link in an infobox is clicked, this will activate an
 	 * appropriate action based on it's prefix.
@@ -215,7 +222,6 @@ public class UserInput extends JPanel implements DocumentListener, HyperlinkList
 			}
 		}
 	}
-	
 	/**
 	 *  This updates the infobox with information on the user's input 
 	 */
@@ -223,6 +229,7 @@ public class UserInput extends JPanel implements DocumentListener, HyperlinkList
 	public void insertUpdate(DocumentEvent e) {
 		updateInfoBox(getInputType());
 	}
+	
 	/**
 	 * This makes a list of genes in this inputbox unique, removing
 	 * any duplicate genes.
@@ -242,7 +249,7 @@ public class UserInput extends JPanel implements DocumentListener, HyperlinkList
 			setInputText(sb.toString());
 		}
 	}
-	
+
 	/**
 	 * @see insertUpdate
 	 */
@@ -250,19 +257,19 @@ public class UserInput extends JPanel implements DocumentListener, HyperlinkList
 	public void removeUpdate(DocumentEvent e) {
 		insertUpdate(e);
 	}
-
+	
+	
 	void setInputGroup(int newgroup) {
 		group = newgroup;
 	}
 	
-	
 	void setInputInfo(String text) {
 		infobox.setText(text);
 	}
-	
 	void setInputText(String text) {
 		inputbox.setText(text);
 	}
+	
 	/**
 	 * Updates the infobox based upon the type of input in the
 	 * inputbox.
@@ -354,6 +361,31 @@ public class UserInput extends JPanel implements DocumentListener, HyperlinkList
 		default:	
 			infobox.setText("Invalid input");
 			break;
+		}
+	}
+	
+	public void getGeneSet(HashSet<String> hashSet) {
+		String[] hpoids;
+		if (getInputType() == 1 || getInputType() == 2) {
+			hpoids = getInputText().split("[^0-9HP:]");
+			for (String hpoid : hpoids) {
+				for (String gene : data.getHpoData(hpoid).getGeneSet()) {
+					if (!hashSet.contains(gene))
+						hashSet.add(gene);
+				}
+			}
+		}if (getInputType() == 3) {
+			hpoids = data.parseNumbersAsHPO(getInputText());
+			for (String hpoid : hpoids) {
+				for (String gene : data.getHpoData(hpoid).getGeneSet()) {
+					if (!hashSet.contains(gene))
+						hashSet.add(gene);
+				}
+			}
+		}if (getInputType() == 4) {
+			for (String gene : getInputText().split("[^A-Z0-9\\-]")) {
+				hashSet.add(gene);
+			}
 		}
 	}
 }

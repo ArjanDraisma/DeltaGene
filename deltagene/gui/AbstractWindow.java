@@ -1,15 +1,11 @@
 package deltagene.gui;
 
-import java.awt.Color;
 import java.awt.Component;
 import java.awt.Container;
 import java.awt.Dimension;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 
-import deltagene.utils.DeltaGeneConstants;
-
-import javax.swing.JButton;
 import javax.swing.JFrame;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
@@ -27,7 +23,7 @@ public abstract class AbstractWindow extends JFrame
 	private JScrollPane contentPanelScrollPane;
 	private GridBagLayout mgr;
 	
-	public AbstractWindow(String title, Component callingComponent, int width, int height, boolean controls, boolean show)
+	public AbstractWindow(String title, Component callingComponent, int width, int height, boolean controls, boolean show, int operation)
 	{
 		super(title);
 		
@@ -41,6 +37,8 @@ public abstract class AbstractWindow extends JFrame
 		setPreferredSize(new Dimension(width,height));
 		
 		setContentPane(rootContainer);
+		
+		setDefaultCloseOperation(operation);
 		
 		if (controls)
 		{

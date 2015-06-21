@@ -1,22 +1,78 @@
 package deltagene.output;
 
+import java.awt.Component;
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
+import java.io.File;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+
+import javax.swing.JFileChooser;
+import javax.swing.JFrame;
+import javax.swing.JMenu;
+import javax.swing.JMenuBar;
+import javax.swing.JMenuItem;
+import javax.swing.JOptionPane;
+import javax.swing.JScrollPane;
+import javax.swing.JTable;
+import javax.swing.WindowConstants;
+
+import com.sun.xml.internal.ws.api.server.Container;
+
+import deltagene.gui.AbstractWindow;
+import deltagene.input.InputHandler;
+import deltagene.input.UserInput;
+import deltagene.input.data.HPODataHandler;
+import deltagene.utils.Error;
+
 
 /**
  * The result class handles displaying, generating and exporting
  * the results
  */
-class result implements ActionListener {
+public class AbstractResult extends AbstractWindow implements ActionListener {
+	/**
+	 * 
+	 */
+	private static final long serialVersionUID = 1L;
+	
+	private HPODataHandler hpoDataHandler;
+	private InputHandler inputHandler;
+
 	JFrame reswindow;
+
 	JScrollPane respanelsp;
 	JMenuBar menubar;
 	JMenu filemenu;
-	JMenuItem export; 
-	Container controlcont;
-	Container rescont;
+	JMenuItem export;
 	JTable restable;
 	String[] headers; // contains the headers for the JTable
 	String[][] results; // contains the data for the JTable
-	int[][] stats;
+	HashMap<String, Integer> stats;
+	
+	public AbstractResult(HPODataHandler hpoDataHandler, InputHandler inputHandler) {
+		super("Results", null, 800, 600, false, true, WindowConstants.DISPOSE_ON_CLOSE);
+		this.hpoDataHandler = hpoDataHandler;
+		this.inputHandler = inputHandler;
+	}
+	
+	private void generate() {
+		if (inputHandler.getOperator() != InputHandler.LIST) 
+			generateComparison();
+		else
+			generateList();
+	}
+
+	private void generateList() {
+		
+	}
+	
+	private void generateComparison() {
+		
+	}
 	
 	@Override
 	public void actionPerformed(ActionEvent ae) {
@@ -70,7 +126,7 @@ class result implements ActionListener {
 					}
 					FileWriter outfile = new FileWriter(file);
 					for (int i = 0; i < headers.length; i++) {
-						outfile.append(headers[i]+" - "+HPODATA.getPhenotypeFromHPO(headers[i]));
+						outfile.append(headers[i]+" - "+hpoDataHandler.getPhenotypeFromHPO(headers[i]));
 						if (i < headers.length-1) {
 							outfile.append(",");
 						}
@@ -96,17 +152,17 @@ class result implements ActionListener {
 		}
 	}
 	
-	public void generate(ArrayList<userinput> in) {
+	public void generate(ArrayList<UserInput> userInput) {
 		headers = null;
 		results = null;
 		
-		getHeaders(in);
-		generateResults(in);
+		getHeaders(userInput);
+		generateResults(userInput);
 		if (results == null) {
-			new Error(getInputError(), "Result error", WindowConstants.DISPOSE_ON_CLOSE);
+			// TODO new Error(getInputError(), "Result error", WindowConstants.DISPOSE_ON_CLOSE);
 			return;
 		}
-		showResults(results, headers);
+		//showResults(results, headers);
 	}
 	
 	/**
@@ -118,14 +174,14 @@ class result implements ActionListener {
 		results = null;
 		headers = hpo.split("(,)");
 		for (int i = 0; i < headers.length; i++) {
-			headers[i] = headers[i]+" - "+HPODATA.getPhenotypeFromHPO(headers[i]);
+			headers[i] = headers[i]+" - "+hpoDataHandler.getPhenotypeFromHPO(headers[i]);
 		}
 		generateResults(hpo);
 		if (results == null) {
-			new Error(getInputError(), "Result error", WindowConstants.DISPOSE_ON_CLOSE);
+			// TODO new Error(getInputError(), "Result error", WindowConstants.DISPOSE_ON_CLOSE);
 			return;
 		}
-		showResults(results, headers);
+		//showResults(results, headers);
 	}
 	
 	/**
@@ -141,9 +197,9 @@ class result implements ActionListener {
 		String[][] outArray = null;
 		int oBSize = 0;
 
-		if (operator != LIST) {
+		if (operator != InputHandler.LIST) {
 			if (oA.size() == 0) {
-				setInputError("Input A has no associated genes.");
+				// TODO setInputError("Input A has no associated genes.");
 				return;
 			}
 			Collections.sort(oA);
@@ -153,22 +209,22 @@ class result implements ActionListener {
 			if (B.size() > oBSize) {
 				oBSize = B.size();
 			}
-			if (operator == LIST) {
+			if (operator == InputHandler.LIST) {
 				Collections.sort(B);
 			}
 		}
 		System.out.println(oBSize);
 		if (oBSize == 0) {
-			if (operator == LIST) {
-				setInputError("This phenotype has no associated genes");
+			if (operator == InputHandler.LIST) {
+				// TODO setInputError("This phenotype has no associated genes");
 			}else{
-				setInputError("Input(s) B do not have any associated genes");
+				// TODO setInputError("Input(s) B do not have any associated genes");
 			}
 			return;
 		}
 		
 		switch (operator) {
-		case DEFAULT:
+		case InputHandler.DEFAULT:
 			// creates a new array which will fit all genes in operand A and all inputs.
 			outArray = new String[oA.size()][oB.size()+1];
 			//fills the output array's [][0] cells with genes from operand A
@@ -192,7 +248,7 @@ class result implements ActionListener {
 			}
 			results = outArray;
 			break;
-		case AND:
+		case InputHandler.AND:
 			// TODO show how many genes differ between input and output
 			
 			// loop through each input in operand B
@@ -209,9 +265,9 @@ class result implements ActionListener {
 				}
 			}
 			if (oA.size() == 0) {
-				setInputError("The command \"A AND B\" returns an empty result!\n"
+				/*setInputError("The command \"A AND B\" returns an empty result!\n"
 							+ "This means that there are no genes that occur in both A AND B.\n"
-							+ "Use the 'Default' setting to confirm this.");
+							+ "Use the 'Default' setting to confirm this.");*/
 				results = null;
 			}else{
 				outArray = new String[oA.size()][1];
@@ -221,7 +277,7 @@ class result implements ActionListener {
 				results =  outArray;
 			}
 		break;
-		case NOT:
+		case InputHandler.NOT:
 			for (int i = 0; i < oB.size(); i++) {
 				for (int o = 0; o < oB.get(i).size(); o++) {
 					if (oA.contains(oB.get(i).get(o))) {
@@ -230,9 +286,9 @@ class result implements ActionListener {
 				}
 			}
 			if (oA.size() == 0) {
-				setInputError("The command \"A NOT B\" returns an empty result!\n"
+				/*setInputError("The command \"A NOT B\" returns an empty result!\n"
 									+ "This means that there are no unique genes in A.\n"
-									+ "Use the 'Default' setting to confirm this.");
+									+ "Use the 'Default' setting to confirm this.");*/
 				results = null;
 			}else{
 				outArray = new String[oA.size()][1];
@@ -242,7 +298,7 @@ class result implements ActionListener {
 				results = outArray;
 			}
 		break;
-		case XOR:
+		case InputHandler.XOR:
 			int maxSize = 0;
 			oBSize = 0;
 			for (int i = 0; i < oB.size(); i++) {
@@ -258,8 +314,8 @@ class result implements ActionListener {
 				oBSize += oB.get(i).size();
 			}
 			if (oA.size() == 0&&oBSize == 0) {
-				setInputError("The command \"A XOR B\" returns an empty result!\n"
-							+ "This means that there are no genes unique to A or B.");
+				/*setInputError("The command \"A XOR B\" returns an empty result!\n"
+							+ "This means that there are no genes unique to A or B.");*/
 				results = null;
 			}else{
 				if (oA.size() > maxSize) {
@@ -283,7 +339,7 @@ class result implements ActionListener {
 				results = outArray;
 			}
 		break;
-		case LIST:
+		case InputHandler.LIST:
 			outArray = new String[oBSize][oB.size()];
 			for (int x = 0; x < oB.size(); x++) {
 				for (int y = 0; y < oB.get(x).size(); y++) {
@@ -300,44 +356,44 @@ class result implements ActionListener {
 	 * and passes it to generateResults(ArrayList<String> ArrayList<ArrayList<String>>, int).
 	 * @param inputs the userinputs available
 	 */
-	public void generateResults(ArrayList<userinput> inputs) {
+	public void generateResults(ArrayList<UserInput> inputs) {
 		ArrayList<String> oA = new ArrayList<String>();
 		ArrayList<ArrayList<String>> oB = new ArrayList<ArrayList<String>>();
 		String txt;
 		int type;
 		
-		for (userinput input : inputs) {
+		for (UserInput input : inputs) {
 			if (input.getInputGroup() == 0) {
 				txt = input.getInputText();
 				type = input.getInputType();
 				if (type == 0) {
-					setInputError("Input A is invalid!");
+					//setInputError("Input A is invalid!");
 					return;
 				}else if (type == 1||type == 2) {
 					
-					HPODATA.findHPOGenes(txt, oA);
+					hpoDataHandler.findHPOGenes(txt, oA);
 				}else if (type == 3) {
-					HPODATA.parseUniqueGene(txt, oA);
+					hpoDataHandler.parseUniqueGene(txt, oA);
 				}else if (type == 4) {
-					HPODATA.findHPOGenes(HPODATA.parseNumbersAsHPO(txt), oA, true);
+					hpoDataHandler.findHPOGenes(hpoDataHandler.parseNumbersAsHPO(txt), oA, true);
 				}
 			}else{
 				oB.add(new ArrayList<String>());
 				txt = input.getInputText();
 				type = input.getInputType();
 				if (type == 0) {
-					setInputError("One of the B inputs is invalid!");
+					//setInputError("One of the B inputs is invalid!");
 					return;
 				}else if (type == 1||type == 2) {
-					HPODATA.findHPOGenes(txt, oB.get(oB.size()-1));
+					hpoDataHandler.findHPOGenes(txt, oB.get(oB.size()-1));
 				}else if (type == 3) {
-					HPODATA.parseUniqueGene(txt, oB.get(oB.size()-1));
+					hpoDataHandler.parseUniqueGene(txt, oB.get(oB.size()-1));
 				}else if (type == 4) {
-					HPODATA.findHPOGenes(HPODATA.parseNumbersAsHPO(txt), oB.get(oB.size()-1), true);
+					hpoDataHandler.findHPOGenes(hpoDataHandler.parseNumbersAsHPO(txt), oB.get(oB.size()-1), true);
 				}
 			}
 		}
-		generateResults(oA, oB, getOperator());
+		generateResults(oA, oB, inputHandler.getOperator());
 	}
 	
 	/**
@@ -349,53 +405,53 @@ class result implements ActionListener {
 		ArrayList<ArrayList<String>> oB = new ArrayList<ArrayList<String>>();
 		for (String hpon : hpo.split("(,)")) {
 			oB.add(new ArrayList<String>());
-			HPODATA.findHPOGenes(hpon, oB.get(oB.size()-1),true);
+			hpoDataHandler.findHPOGenes(hpon, oB.get(oB.size()-1),true);
 		}
-		generateResults(null, oB, LIST);
+		generateResults(null, oB, InputHandler.LIST);
 	}
 	
-	public void getHeaders(ArrayList<userinput> inputs) {
-		getHeaders(inputs, getOperator());
+	public void getHeaders(ArrayList<UserInput> inputs) {
+		getHeaders(inputs, inputHandler.getOperator());
 	}
 	
-	public void getHeaders(ArrayList<userinput> inputs, int operator) {
+	public void getHeaders(ArrayList<UserInput> inputs, int operator) {
 		ArrayList<String> outAL = new ArrayList<String>();
 		StringBuilder sb = new StringBuilder();
-		if (operator == AND || operator == NOT) {
-			for (userinput input : inputs) {
+		if (operator == InputHandler.AND || operator == InputHandler.NOT) {
+			for (UserInput input : inputs) {
 				String txt = input.getInputText();
 				//String hpo;
 				switch (input.getInputType()) {
 				case 1:
 					for (String hpon : txt.split("([^A-Z0-9:]+)")) {
-						sb.append(hpon+" - "+HPODATA.getPhenotypeFromHPO(hpon));
+						sb.append(hpon+" - "+hpoDataHandler.getPhenotypeFromHPO(hpon));
 					}
 					break;
 				case 2:
-					sb.append(txt+" - "+HPODATA.getPhenotypeFromHPO(txt));
+					sb.append(txt+" - "+hpoDataHandler.getPhenotypeFromHPO(txt));
 					break;
 				case 3:
 					sb.append("List of genes");
 					break;
 				case 4:
-					for (String hpon : HPODATA.parseNumbersAsHPO(txt)) {
-						sb.append(hpon+" - "+HPODATA.getPhenotypeFromHPO(hpon));
+					for (String hpon : hpoDataHandler.parseNumbersAsHPO(txt)) {
+						sb.append(hpon+" - "+hpoDataHandler.getPhenotypeFromHPO(hpon));
 					}
 				}
 				if (input.getInputGroup() == 0) {
-					if (getOperator() == AND) {
+					if (inputHandler.getOperator() == InputHandler.AND) {
 						sb.append(" AND (");
 					}else{
 						sb.append(" NOT (");
 					}
 				}
-				if (input.getID() == getInputCount()-1) {
+				if (input.getID() == inputHandler.getInputCount()-1) {
 					sb.append(")");
 				}
 			}
 			outAL.add(sb.toString());
-		}else if (operator == DEFAULT || operator == XOR) {
-			for (userinput input : inputs) {
+		}else if (operator == InputHandler.DEFAULT || operator == InputHandler.XOR) {
+			for (UserInput input : inputs) {
 				String txt = input.getInputText();
 				String[] hpolist;
 				int type = input.getInputType();
@@ -410,7 +466,7 @@ class result implements ActionListener {
 									sb.append(", ");
 								}
 							}else{
-								sb.append(hpolist[i]+" - "+HPODATA.getPhenotypeFromHPO(hpolist[i]));
+								sb.append(hpolist[i]+" - "+hpoDataHandler.getPhenotypeFromHPO(hpolist[i]));
 							}
 						}
 						outAL.add(sb.toString());
@@ -420,7 +476,7 @@ class result implements ActionListener {
 						outAL.add(sb.toString());
 						break;
 					case 4:
-						hpolist = HPODATA.parseNumbersAsHPO(txt);
+						hpolist = hpoDataHandler.parseNumbersAsHPO(txt);
 						for (int i = 0; i < hpolist.length; i++) {
 							if (hpolist.length > 1) {
 								sb.append(hpolist[i]);
@@ -428,7 +484,7 @@ class result implements ActionListener {
 									sb.append(", ");
 								}
 							}else{
-								sb.append(hpolist[i]+" - "+HPODATA.getPhenotypeFromHPO(hpolist[i]));
+								sb.append(hpolist[i]+" - "+hpoDataHandler.getPhenotypeFromHPO(hpolist[i]));
 							}
 						}
 						outAL.add(sb.toString());
@@ -439,14 +495,14 @@ class result implements ActionListener {
 				}
 				sb.delete(0, sb.length());
 			}
-		}else if (operator == LIST) {
-			for (userinput input : inputs) {
+		}else if (operator == InputHandler.LIST) {
+			for (UserInput input : inputs) {
 				String txt = input.getInputText();
 				String hpo;
 				switch (input.getInputType()) {
 					case 1:
 						hpo = txt.subSequence(txt.indexOf("HP:"), txt.indexOf("HP:"+9)).toString(); 
-						sb.append(hpo+" - "+HPODATA.getPhenotypeFromHPO(hpo));
+						sb.append(hpo+" - "+hpoDataHandler.getPhenotypeFromHPO(hpo));
 						outAL.add(sb.toString());
 						break;
 					case 2: 
@@ -458,8 +514,8 @@ class result implements ActionListener {
 						outAL.add(sb.toString());
 						break;
 					case 4:
-						for (String hpon : HPODATA.parseNumbersAsHPO(txt)) {
-							sb.append(hpon+" - "+HPODATA.getPhenotypeFromHPO(hpon));
+						for (String hpon : hpoDataHandler.parseNumbersAsHPO(txt)) {
+							sb.append(hpon+" - "+hpoDataHandler.getPhenotypeFromHPO(hpon));
 						}
 						outAL.add(sb.toString());
 						break;
@@ -491,8 +547,7 @@ class result implements ActionListener {
 	 * @param results the results in the form of a two-dimensional string array
 	 * @param headers the headers in the form of a string array
 	 */
-	public void showResults(String[][] results, String[] headers) {
-		reswindow = new JFrame("Results");
+	public void showResults() {
 		restable = new JTable(results, headers);
 		if (headers.length > 5) {
 			restable.setAutoResizeMode(JTable.AUTO_RESIZE_OFF);
@@ -504,11 +559,10 @@ class result implements ActionListener {
 		export.addActionListener(this);
 		export.setActionCommand("export");
 		reswindow.setDefaultCloseOperation(WindowConstants.DISPOSE_ON_CLOSE);
-		reswindow.setPreferredSize(parentWindow.getSize());
 		reswindow.setJMenuBar(menubar);
 		menubar.add(filemenu);
 		filemenu.add(export);
-		reswindow.add(respanelsp);
+		getContentPanel().add(respanelsp);
 		reswindow.pack();
 		reswindow.setLocationRelativeTo(null);
 		reswindow.setVisible(true);

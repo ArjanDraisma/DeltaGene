@@ -61,7 +61,6 @@ public class HPODataHandler implements TreeModel {
 	private static HPOFileHandler hpoFileHandler;
 	private static HashMap<String, HPONumber> data = 
 			new HashMap<String, HPONumber>();
-	public HPOBrowser browser;
 	public final static int STATE_INIT = 0;
 	public final static int STATE_WAIT = 1;
 	public final static int STATE_LOAD_HPO = 2;
@@ -69,6 +68,7 @@ public class HPODataHandler implements TreeModel {
 	public final static int STATE_READY = 4;
 	private static int state;
 	private static HPONumber rootNode;
+	public HPOBrowser browser;
 	
 	public HPODataHandler(HPOFileHandler hpoFileHandler) {
 		state = STATE_INIT;
@@ -78,20 +78,13 @@ public class HPODataHandler implements TreeModel {
 		data.put("HP:0000000", rootNode);
 	}
 	
-	// Finds the path of a given hpo number from bottom to top
-	public DefaultMutableTreeNode getReverseHPOHeirarchy(DefaultMutableTreeNode hponode) {
-		String hpo = hponode.getUserObject().toString().substring(0,10);
-		DefaultMutableTreeNode metaNode = new DefaultMutableTreeNode();
-		if (data.get(hpo).getParentCount() == 0) {
-			return hponode;
-		}
-		for (HPONumber parent : data.get(hpo).getParents()) {
-			metaNode.add(getReverseHPOHeirarchy(new DefaultMutableTreeNode(parent.hpo())));
-		}
-		return metaNode;
+	@Override
+	public void addTreeModelListener(TreeModelListener arg0) {
+		// TODO Auto-generated method stub
+		
 	}
 
-	public void build(InputHandler inputinstance) {
+	public void build() {
 		try {
 			if (hpoFileHandler.getState() != HPOFileHandler.STATE_READY) {
 				state = STATE_WAIT;
@@ -151,8 +144,47 @@ public class HPODataHandler implements TreeModel {
 			}
 		}
 	}
+	/**
+	 * This function returns a full list of phenotypes, to be used in the
+	 * autocompletion of input boxes. The list of phenotypes will also
+	 * contain meta information, such as age of onset.
+	 * @return a full ArrayList of phenotypes.
+	 */
+	public TreeMap<String, String> getACList() {
+		
+		TreeMap<String, String> out = new TreeMap<String, String>();
+		HashSet<String> set = new HashSet<String>();
+		for (HPONumber entry : data.values()) {
+			if (!set.contains(entry.phenotype())) {
+				set.add(entry.phenotype());
+				out.put(entry.phenotype(), entry.hpo());
+			}
+		}
+		return out;
+	}
+	
 	public HPOBrowser getBrowser() {
 		return browser;
+	}
+	
+	@Override
+	public Object getChild(Object node, int i) {
+		return ((HPONumber)node).getChildAt(i);
+	}
+	
+	@Override
+	public int getChildCount(Object node) {
+		return ((HPONumber)node).getChildCount();
+	}
+
+	public String[] getHPOFromGene(String gene) {
+		ArrayList<String> out = new ArrayList<String>();
+		for (HPONumber hpo : data.values()) {
+			if (hpo.getGeneSet().contains(gene)) {
+				out.add(hpo.hpo());
+			}
+		}
+		return out.toArray(new String[out.size()]);
 	}
 	
 	/**
@@ -169,16 +201,6 @@ public class HPODataHandler implements TreeModel {
 			}
 		}
 		return null;
-	}
-	
-	public String[] getHPOFromGene(String gene) {
-		ArrayList<String> out = new ArrayList<String>();
-		for (HPONumber hpo : data.values()) {
-			if (hpo.getGeneSet().contains(gene)) {
-				out.add(hpo.hpo());
-			}
-		}
-		return out.toArray(new String[out.size()]);
 	}
 	
 	/**
@@ -206,23 +228,9 @@ public class HPODataHandler implements TreeModel {
 		return node;
 	}
 
-	/**
-	 * This function returns a full list of phenotypes, to be used in the
-	 * autocompletion of input boxes. The list of phenotypes will also
-	 * contain meta information, such as age of onset.
-	 * @return a full ArrayList of phenotypes.
-	 */
-	public TreeMap<String, String> getACList() {
-		
-		TreeMap<String, String> out = new TreeMap<String, String>();
-		HashSet<String> set = new HashSet<String>();
-		for (HPONumber entry : data.values()) {
-			if (!set.contains(entry.phenotype())) {
-				set.add(entry.phenotype());
-				out.put(entry.phenotype(), entry.hpo());
-			}
-		}
-		return out;
+	@Override
+	public int getIndexOfChild(Object node, Object child) {
+		return ((HPONumber)node).getIndex((HPONumber)child);
 	}
 	
 	/**
@@ -237,6 +245,43 @@ public class HPODataHandler implements TreeModel {
 		return null;
 	}
 	
+	// Finds the path of a given hpo number from bottom to top
+	public DefaultMutableTreeNode getReverseHPOHeirarchy(DefaultMutableTreeNode hponode) {
+		String hpo = hponode.getUserObject().toString().substring(0,10);
+		DefaultMutableTreeNode metaNode = new DefaultMutableTreeNode();
+		if (data.get(hpo).getParentCount() == 0) {
+			return hponode;
+		}
+		for (HPONumber parent : data.get(hpo).getParents()) {
+			metaNode.add(getReverseHPOHeirarchy(new DefaultMutableTreeNode(parent.hpo())));
+		}
+		return metaNode;
+	}
+	
+	@Override
+	public Object getRoot() {
+		return rootNode;
+	}
+	
+	public int getState() {
+		return state;
+	}
+	
+	public HPONumber getHpoData(String hpo) {
+		if (data.containsKey(hpo)) 
+			return data.get(hpo);
+		return null;
+	}
+	
+	@Override
+	public boolean isLeaf(Object node) {
+		return ((HPONumber)node).isLeaf();
+	}
+
+	public boolean isReady() {
+		return state == STATE_READY;
+	}
+
 	/**
 	 * This function parses a (list) number as a HPO number, padding it with
 	 * zeroes and prefixing 'HP:'. This function does not check if
@@ -282,7 +327,7 @@ public class HPODataHandler implements TreeModel {
 			inAL.add(out.get(i));
 		}
 	}
-	
+
 	/**
 	 * This function populates the hponumbers with their genes.
 	 * Passes through the association file line-by-line and adds
@@ -362,7 +407,7 @@ public class HPODataHandler implements TreeModel {
 			e.printStackTrace();
 		}
 	}
-	
+
 	private void populateHPOObject (File inhpo) {
 		try {
 			BufferedReader in = new BufferedReader(new FileReader(inhpo));
@@ -429,52 +474,13 @@ public class HPODataHandler implements TreeModel {
 			e.printStackTrace();
 		}
 	}
-	
+
 	public boolean reloadFiles() {
 		data.clear();
 		populateHPOObject(hpoFileHandler.getHPOFile());
 		populateHPOGenes(hpoFileHandler.getAssocFile());
 		// TODO throw error if fail
 		return true;
-	}
-	
-	public int getState() {
-		return state;
-	}
-	
-	public boolean isReady() {
-		return state == STATE_READY;
-	}
-
-	@Override
-	public void addTreeModelListener(TreeModelListener arg0) {
-		// TODO Auto-generated method stub
-		
-	}
-
-	@Override
-	public Object getChild(Object node, int i) {
-		return ((HPONumber)node).getChildAt(i);
-	}
-
-	@Override
-	public int getChildCount(Object node) {
-		return ((HPONumber)node).getChildCount();
-	}
-
-	@Override
-	public int getIndexOfChild(Object node, Object child) {
-		return ((HPONumber)node).getIndex((HPONumber)child);
-	}
-
-	@Override
-	public Object getRoot() {
-		return rootNode;
-	}
-
-	@Override
-	public boolean isLeaf(Object node) {
-		return ((HPONumber)node).isLeaf();
 	}
 
 	@Override

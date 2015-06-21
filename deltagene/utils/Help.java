@@ -10,6 +10,7 @@ import javax.swing.WindowConstants;
 import javax.swing.event.HyperlinkEvent;
 import javax.swing.event.HyperlinkListener;
 
+import deltagene.gui.AbstractWindow;
 import deltagene.main.DeltaGene;
 
 
@@ -19,17 +20,21 @@ import deltagene.main.DeltaGene;
  * The HelpClass manages and shows the help window, with the help pages
  * in the /Help/ directory.
  */
-public class Help implements HyperlinkListener {
-	JFrame helpFrame = new JFrame("Help"); 		// This JFrame is the help window JFrame 
-	JEditorPane content = new JEditorPane();	// The content EditorPane will contain the help HTML
-	JScrollPane contentScrollPane;							// This is the scrollpane for the 'content' editorpane
+public class Help extends AbstractWindow implements HyperlinkListener {
+	/**
+	 * 
+	 */
+	private static final long serialVersionUID = 1L;
+	JEditorPane helpContent = new JEditorPane();	// The content EditorPane will contain the help HTML
+	JScrollPane helpContentScrollPane;							// This is the scrollpane for the 'content' editorpane
 	
-	public Help(String page){
-		//helpFrame.setPreferredSize(mainWindow.getSize()); 	// this sets the size of the help window JFrame, which will be the same as the main window
-		contentScrollPane = new JScrollPane(content);	// this creates the JScrollPane and sets the content EditorPane as its viewing pane
-		content.setEditable(false);						// we do not want the user to be able to edit the EditorPane
-		content.addHyperlinkListener(this);				// this listens for click on hyperlinks, which are used as navigation in the help pages
-		helpFrame.add(contentScrollPane);								// this adds the jscrollpane, which 'contains' the EditorPane to the help JFrame
+	public Help(JFrame window, String page){
+		super("Help", window, 800, 600, false, true);
+		helpContentScrollPane = new JScrollPane(helpContent);	// this creates the JScrollPane and sets the content EditorPane as its viewing pane
+		helpContent.setEditable(false);						// we do not want the user to be able to edit the EditorPane
+		helpContent.addHyperlinkListener(this);				// this listens for click on hyperlinks, which are used as navigation in the help pages
+		getContentPanel().add(helpContentScrollPane);		// this adds the jscrollpane, which 'contains' the EditorPane to the help JFrame
+		this.setDefaultCloseOperation(WindowConstants.DISPOSE_ON_CLOSE);
 		show(page);
 	}
 	
@@ -40,7 +45,7 @@ public class Help implements HyperlinkListener {
 	public void hyperlinkUpdate(HyperlinkEvent e) {
 		try {
 			if (e.getEventType() == HyperlinkEvent.EventType.ACTIVATED) {
-				content.setPage(e.getURL());
+				helpContent.setPage(e.getURL());
 			}
 		}catch (IOException ioe) {
 			new Error(Error.IO_ERROR, Error.IO_ERROR_T, WindowConstants.DISPOSE_ON_CLOSE);
@@ -59,10 +64,7 @@ public class Help implements HyperlinkListener {
 			 * extension will be added.
 			 */
 			URL u = DeltaGene.class.getResource("/Help/"+page+".html");
-			content.setPage(u);		// this sets the html file as the editorpane's content
-			helpFrame.pack();		
-			helpFrame.setLocationRelativeTo(null); 	// this centers the help/about window
-			helpFrame.setVisible(true);
+			helpContent.setPage(u);		// this sets the html file as the editorpane's content
 		}catch (IOException e){
 			/* Throw an error if the page files are missing or cannot be opened.
 			 * Considering the help files are packed into the .jar, this really

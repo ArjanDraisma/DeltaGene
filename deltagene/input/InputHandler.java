@@ -37,6 +37,8 @@ import deltagene.gui.MainGui;
 import deltagene.input.data.HPODataHandler;
 import deltagene.io.HPOFileHandler;
 import deltagene.main.DeltaGene;
+import deltagene.output.AbstractResult;
+import deltagene.output.ComparisonResult;
 import deltagene.utils.Error;
 
 import java.awt.Component;
@@ -90,13 +92,10 @@ import javax.swing.UIManager;
 import javax.swing.WindowConstants;
 
 /**
- * This class handles input from the user, generating headers and generating 
- * results.
  * @author ArjanDraisma
  * 
  */
 public class InputHandler {
-	private static Container contentPane;
 	public HPODataHandler hpoDataHandler;
 	public HPOFileHandler hpoFileHandler;
 	public static ArrayList<UserInput> inputs;
@@ -122,7 +121,6 @@ public class InputHandler {
 		if (gui != null)
 		{
 			this.gui = gui;
-			this.contentPane = this.gui.getContentPanel();
 		}
 		inputs = new ArrayList<UserInput>();
 		hpoFileHandler = new HPOFileHandler();
@@ -130,9 +128,31 @@ public class InputHandler {
 		DeltaGene.THREADPOOL.submit(new Runnable() {
 			@Override
 			public void run() {
-				
+				while (hpoFileHandler.getState() != HPOFileHandler.STATE_READY) {
+					gui.updateTitle("Downloading HPO/association files: "+Integer.toString(hpoFileHandler.getDown())+"Kb");
+				}
+				while (hpoDataHandler.getState() != HPODataHandler.STATE_READY) {
+					gui.updateTitle("Building HPO/association data");
+				}
+				gui.updateTitle(null);
 			}
 		});
+		DeltaGene.THREADPOOL.submit(new Runnable() {
+			@Override
+			public void run() {
+				hpoFileHandler.LoadFiles();
+				hpoDataHandler.build();
+			}
+		});
+	}
+	
+	UserInput getUserInputFromComponent (Object object) {
+		for (UserInput input : inputs) {
+			if (input.getInputBox() == object) {
+				return input;
+			}
+		}
+		return null;
 	}
 	
 	// this constructor is called by the gui
@@ -179,7 +199,7 @@ public class InputHandler {
 		return null;
 	}
 	
-	int getInputCount() {
+	public int getInputCount() {
 		return inputs.size();
 	}
 
@@ -191,23 +211,16 @@ public class InputHandler {
 		return inputs.get(index).getInputText();
 	}
 	
-	int getOperator() {
+	public int getOperator() {
 		return OPERATOR;
 	}
 	
 	public void getResults() {
-		switch (OPERATOR) {
-			case DEFAULT:
-				//TODO
-		}
-			//resultobject.generate(inputs);
+		new ComparisonResult(hpoDataHandler, this);
 	}
 	
 	public void initialize(MainGui gui) {
 		state = STATE_INIT;
-		
-		// start thread that keeps track of the download progress.
-		gui.startDownload();
 		
 		/* instantiate the autocompletion class with a future treemap
 		 * object. will be ready once the files have been downloaded 
@@ -217,7 +230,7 @@ public class InputHandler {
 			public TreeMap<String,String> call () {
 				try {
 					// While the future object is not yet available, wait
-					while (hpoDataHandler.getState() < hpoDataHandler.STATE_LOAD_ASSOC) {
+					while (hpoDataHandler.getState() < HPODataHandler.STATE_LOAD_ASSOC) {
 						Thread.sleep(100);
 					}
 					/* When done loading, check if user has prompted the
@@ -245,10 +258,8 @@ public class InputHandler {
 					return null;
 				}
 			}
-		}));
+		}), this);
 		state = STATE_BUILDING;
-		hpoFileHandler.LoadFiles();
-		hpoDataHandler.build(this);
 		state = STATE_READY;
 	}
 	
@@ -277,7 +288,7 @@ public class InputHandler {
 		UserInput input = new UserInput(group, this);
 		inputs.add(input);
 		gui.getContentPanel().add(input);
-		//ac.add(input);
+		ac.add(input);
 		gui.revalidate();
 		gui.repaint();
 	}
@@ -288,7 +299,7 @@ public class InputHandler {
 		UserInput input = inputs.get(inputs.size()-1);
 		inputs.remove(input);
 		gui.getContentPanel().remove(input);
-		//ac.remove(input);
+		ac.remove(input);
 		gui.revalidate();
 		gui.repaint();
 	}

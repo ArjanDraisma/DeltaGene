@@ -66,8 +66,8 @@ MouseListener, ActionListener {
 	}
 	State state;
 	
-	public AbstractBrowser (final HPODataHandler hpodata, String title) {
-		
+	public AbstractBrowser (Component callingComponent, final HPODataHandler hpodata, String title) {
+		super(callingComponent);
 		this.state = State.STATE_INIT;
 		browserWindow = new JFrame("HPO Browser");
 		browserControlPanel = new JPanel();

@@ -36,35 +36,25 @@ package deltagene.gui;
 import deltagene.utils.Error;
 import deltagene.utils.Help;
 import deltagene.input.InputHandler;
-import deltagene.input.UserInput;
 import deltagene.input.data.HPODataHandler;
-import deltagene.io.HPOFileHandler;
 import deltagene.main.DeltaGene;
 
 import java.awt.Button;
 import java.awt.Color;
-import java.awt.Container;
 import java.awt.Dimension;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.ItemEvent;
 import java.awt.event.ItemListener;
-import java.awt.FlowLayout;
-import java.awt.GridBagConstraints;
-import java.awt.Insets;
+import java.lang.reflect.InvocationTargetException;
 
 import javax.swing.BorderFactory;
 import javax.swing.BoxLayout;
 import javax.swing.ImageIcon;
 import javax.swing.JComboBox;
-import javax.swing.JFrame;
-import javax.swing.JLabel;
 import javax.swing.JMenu;
 import javax.swing.JMenuBar;
 import javax.swing.JMenuItem;
-import javax.swing.JPanel;
-import javax.swing.JScrollPane;
-import javax.swing.SpringLayout;
 import javax.swing.SwingUtilities;
 import javax.swing.SwingWorker;
 import javax.swing.WindowConstants;
@@ -83,12 +73,13 @@ public class MainGui extends AbstractWindow implements ActionListener, ItemListe
 	
 	// the constructor class builds the main window and adds the inputs
 	public MainGui () {
-		super("DeltaGene",null, 800, 600, true, true);
+		super("DeltaGene",null, 800, 600, true, true, WindowConstants.EXIT_ON_CLOSE);
 		inputInstance = new InputHandler(null, null, null, null, null, this, false);
 		this.setMinimumSize(new Dimension(500,500));
 		addMenus();
 		addControls();
 		getContentPanel().setLayout(new BoxLayout(getContentPanel(), BoxLayout.PAGE_AXIS));
+		inputInstance.initialize(this);
 		inputInstance.addInput(0);
 		inputInstance.addInput(1);
 	}
@@ -153,11 +144,9 @@ public class MainGui extends AbstractWindow implements ActionListener, ItemListe
 		String[] operators = {"Default", "AND", "NOT", "XOR"};
 		operandSelectionBox = new JComboBox<String>(operators);
 		
-		BoxLayout layout = new BoxLayout(getControlPanel(), BoxLayout.LINE_AXIS);
-		
 		submitButton.addActionListener(this);
 		submitButton.setActionCommand("submit");
-		submitButton.setEnabled(false);
+		submitButton.setEnabled(true);
 		getControlPanel().add(submitButton);
 		
 		clearButton.addActionListener(this);
@@ -227,7 +216,7 @@ public class MainGui extends AbstractWindow implements ActionListener, ItemListe
 		}if (e.getActionCommand().equals("format")) {
 			inputInstance.formatGenes();
 		}if (e.getActionCommand().equals("help")) {
-			new Help("index");
+			new Help(this, "index");
 		}if (e.getActionCommand().equals("browser")) {
 			DeltaGene.THREADPOOL.submit(new Runnable() {
 				@Override
@@ -246,36 +235,30 @@ public class MainGui extends AbstractWindow implements ActionListener, ItemListe
 				}
 			});
 		}if (e.getActionCommand().equals("about")) {
-			new Help("about");
+			new Help(this, "about");
 		}if (e.getActionCommand().equals("exit")) {
 			System.exit(0);
 		}
 	}
 
-	public void startDownload() {
-		final InputHandler inputInstance = this.inputInstance;
-		SwingUtilities.invokeLater(new Runnable() {
-			@Override
-			public void run() {
-				try {
-					while (inputInstance.getFileHandler().getState() < HPOFileHandler.STATE_READY) {
-						Thread.sleep(5);
-						switch (inputInstance.getFileHandler().getState()) {
-							case HPOFileHandler.STATE_DOWNLOAD_HPO:
-								setTitle("DeltaGene - Downloading HPO File - "+inputInstance.getFileHandler().getDown());
-							case HPOFileHandler.STATE_DOWNLOAD_ASSOC:
-								setTitle("DeltaGene - Downloading association File - "+inputInstance.getFileHandler().getDown());
-						}
-					}
-					setTitle("DeltaGene - Building HPO data");
-					while (inputInstance.getDataHandler().getState() < HPODataHandler.STATE_READY) {
-						Thread.sleep(5);
-					}
-					setTitle("DeltaGene - Ready");
-				}catch (InterruptedException e) {
-					new Error(Error.UNDEF_ERROR, Error.UNDEF_ERROR_T, DO_NOTHING_ON_CLOSE);
+	public void updateTitle (String info) {
+		try {
+			SwingUtilities.invokeAndWait(new Runnable() {
+				
+				@Override
+				public void run() {
+					if (info == null) 
+						setTitle("Deltagene");
+					else 
+						setTitle("Deltagene - "+info);
 				}
-			}
-		});	
+			});
+		} catch (InvocationTargetException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		} catch (InterruptedException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
 	}
 }

@@ -23,7 +23,7 @@ import deltagene.input.UserInput;
 /**
  * This class handles the autocompletion for the textareas
  */
-class Autocomplete implements DocumentListener, ActionListener {
+class Autocomplete implements DocumentListener, ActionListener, FocusListener {
 	/**
 	 * @author ArjanDraisma
 	 * acWindow implements a custom version of show, tailored to the
@@ -46,20 +46,7 @@ class Autocomplete implements DocumentListener, ActionListener {
 		}
 	}
 	
-	class keyHandler implements KeyListener, FocusListener {
-		@Override
-		public void focusGained(FocusEvent e) {
-			if (acInvoker == null||!e.getComponent().equals(
-					acInvoker.getInputBox())) {
-				//acInvoker = getInputboxObject((JTextArea)e.getSource());
-				acDropdownBox.setInvoker(acInvoker.getInputBox());
-			}
-		}
-		
-		@Override
-		public void focusLost(FocusEvent arg0) {
-		}
-		
+	class keyHandler implements KeyListener {
 
 		private void highlightselection (int index) {
 			for (int i = 0; i < acDropdownBox.getComponentCount(); i++) {
@@ -127,16 +114,17 @@ class Autocomplete implements DocumentListener, ActionListener {
 	
 	AutocompleteWindow acDropdownBox;
 	keyHandler keyHandlerInstance;
-	
 	UserInput acInvoker;
 	Future<TreeMap<String, String>> futureACList;
 	TreeMap<String,String> ACList;
+	InputHandler inputHandler;
 	
-	Autocomplete (Future<TreeMap<String,String>> futureAcKeywordList) {
+	Autocomplete (Future<TreeMap<String,String>> futureAcKeywordList, InputHandler inputHandler) {
 		futureACList = futureAcKeywordList;
+		this.inputHandler = inputHandler;
 		keyHandlerInstance = new keyHandler();
 		acDropdownBox = new AutocompleteWindow();
-		acDropdownBox.addFocusListener(keyHandlerInstance);
+		acDropdownBox.addFocusListener(this);
 		acDropdownBox.setVisible(false);
 	}
 	
@@ -148,16 +136,29 @@ class Autocomplete implements DocumentListener, ActionListener {
 	
 	public void add (UserInput input) {
 		input.getDocument().addDocumentListener(this);
-		input.getInputBox().addFocusListener(keyHandlerInstance);
+		input.getInputBox().addFocusListener(this);
 		input.getInputBox().addKeyListener(keyHandlerInstance);
 	}
 	
 	public void remove(UserInput input) {
 		input.getDocument().removeDocumentListener(this);
-		input.getInputBox().removeFocusListener(keyHandlerInstance);
+		input.getInputBox().removeFocusListener(this);
 		input.getInputBox().removeKeyListener(keyHandlerInstance);
 	}
 
+	@Override
+	public void focusGained(FocusEvent e) {
+		if (acInvoker == null||!e.getComponent().equals(
+				acInvoker.getInputBox())) {
+			acInvoker = inputHandler.getUserInputFromComponent(e.getSource());
+			acDropdownBox.setInvoker(acInvoker.getInputBox());
+		}
+	}
+	
+	@Override
+	public void focusLost(FocusEvent arg0) {
+	}
+	
 	// changedupdate is not used on plainDocuments, as used by
 	// JTextArea
 	@Override
