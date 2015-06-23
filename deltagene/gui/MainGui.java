@@ -36,6 +36,7 @@ package deltagene.gui;
 import deltagene.utils.Error;
 import deltagene.utils.Help;
 import deltagene.input.InputHandler;
+import deltagene.input.browser.HPOBrowser;
 import deltagene.input.data.HPODataHandler;
 import deltagene.main.DeltaGene;
 
@@ -221,44 +222,13 @@ public class MainGui extends AbstractWindow implements ActionListener, ItemListe
 			DeltaGene.THREADPOOL.submit(new Runnable() {
 				@Override
 				public void run() {
-					while (inputInstance.getDataHandler().getState() < HPODataHandler.STATE_LOAD_ASSOC) {
-						try {
-							Thread.sleep(50);
-						} catch (InterruptedException e) {
-							new Error(Error.UNDEF_ERROR, Error.UNDEF_ERROR_T,
-									WindowConstants.DISPOSE_ON_CLOSE);
-							e.printStackTrace();
-						}
-					}
-					inputInstance.getDataHandler().getBrowser().showHPOHeirarchy("HP:0000001",
-							inputInstance.getDataHandler());
+					new HPOBrowser(null, inputInstance, "HP:0000001");
 				}
 			});
 		}if (e.getActionCommand().equals("about")) {
 			new Help(this, "about");
 		}if (e.getActionCommand().equals("exit")) {
 			System.exit(0);
-		}
-	}
-
-	public void updateTitle (String info) {
-		try {
-			SwingUtilities.invokeAndWait(new Runnable() {
-				
-				@Override
-				public void run() {
-					if (info == null) 
-						setTitle("Deltagene");
-					else 
-						setTitle("Deltagene - "+info);
-				}
-			});
-		} catch (InvocationTargetException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		} catch (InterruptedException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
 		}
 	}
 }
