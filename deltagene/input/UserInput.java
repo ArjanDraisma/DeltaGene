@@ -36,6 +36,8 @@ import javax.swing.text.Document;
 
 
 
+
+import deltagene.input.browser.HPOBrowser;
 import deltagene.input.data.HPODataHandler;
 import deltagene.main.DeltaGene;
 
@@ -216,6 +218,12 @@ public class UserInput extends JPanel implements DocumentListener, HyperlinkList
 			if (desc.contains("genes:")) {
 				// TODO resultobject.generate(desc.substring(6));
 			}else if (desc.contains("tree:")) {
+				DeltaGene.THREADPOOL.submit(new Runnable() {
+					@Override
+					public void run() {
+						new HPOBrowser(null, input, desc.substring(5));
+					}
+				});
 				// TODO HPOData.browser.showHPOHeirarchy(desc.substring(5), HPOData);
 			}else if (desc.equals("hpogenes")) {
 				// TODO HPOData.browser.showGenesUnderHPO(desc.substring(8), HPOData);

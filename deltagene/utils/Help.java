@@ -21,20 +21,16 @@ import deltagene.main.DeltaGene;
  * in the /Help/ directory.
  */
 public class Help extends AbstractWindow implements HyperlinkListener {
-	/**
-	 * 
-	 */
 	private static final long serialVersionUID = 1L;
 	JEditorPane helpContent = new JEditorPane();	// The content EditorPane will contain the help HTML
 	JScrollPane helpContentScrollPane;							// This is the scrollpane for the 'content' editorpane
 	
 	public Help(JFrame window, String page){
-		super("Help", window, 800, 600, false, true);
+		super("Help", window, 800, 600, false, true, WindowConstants.DISPOSE_ON_CLOSE);
 		helpContentScrollPane = new JScrollPane(helpContent);	// this creates the JScrollPane and sets the content EditorPane as its viewing pane
 		helpContent.setEditable(false);						// we do not want the user to be able to edit the EditorPane
 		helpContent.addHyperlinkListener(this);				// this listens for click on hyperlinks, which are used as navigation in the help pages
 		getContentPanel().add(helpContentScrollPane);		// this adds the jscrollpane, which 'contains' the EditorPane to the help JFrame
-		this.setDefaultCloseOperation(WindowConstants.DISPOSE_ON_CLOSE);
 		show(page);
 	}
 	

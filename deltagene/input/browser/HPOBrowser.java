@@ -67,11 +67,16 @@ MouseListener, ActionListener {
 		searchButton = new JButton("Find");
 		listButton = new JButton("List genes");
 		addButton = new JButton("Add to input");
+		GridBagConstraints c = new GridBagConstraints();
 		
 		final JLabel waitlabel = new JLabel("Please wait until the HPO database"
 				+ "has finished loading...");
 		
-		getContentPanel().add(waitlabel);
+		getContentPanel().setLayout(new GridBagLayout());
+		c.fill = GridBagConstraints.BOTH;
+		c.weightx = 1;
+		c.weighty = 1;
+		getContentPanel().add(waitlabel, c);
 		
 		while (this.inputHandler.getState() != InputHandler.STATE_READY) {
 			try {
@@ -84,14 +89,17 @@ MouseListener, ActionListener {
 		}
 		
 		getContentPanel().remove(waitlabel);
-		
-		hpoBrowserTree = new HPOTree((HPONumber)inputHandler.getDataHandler().getRoot());
+		HPONumber root = (HPONumber)inputHandler.getDataHandler().getRoot();
+		hpoBrowserTree = new HPOTree(root);
 		hpoBrowserTree.addMouseListener(this);
 		hpoBrowserTree.setExpandsSelectedPaths(true);
 		hpoBrowserTree.setLargeModel(true);
+		for (TreePath path : find(root, hpo)) {
+			hpoBrowserTree.addSelectionPath(path);
+		}
 		treeScrollPane.setViewportView(hpoBrowserTree);
-		getContentPanel().add(treeScrollPane);
 		
+		getContentPanel().add(treeScrollPane, c);
 		
 		searchField.addKeyListener(this);
 		getControlPanel().setLayout(new FlowLayout());
