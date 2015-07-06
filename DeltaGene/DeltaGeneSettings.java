@@ -1,5 +1,7 @@
 package DeltaGene;
 
+import java.awt.Component;
+import java.awt.Container;
 import java.awt.Dialog;
 import java.awt.Dimension;
 import java.awt.GridBagConstraints;
@@ -18,11 +20,15 @@ import java.net.URL;
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
 import java.util.Date;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.TreeMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import javax.swing.ButtonGroup;
+import javax.swing.DefaultListSelectionModel;
 import javax.swing.JButton;
 import javax.swing.JCheckBox;
 import javax.swing.JDialog;
@@ -31,14 +37,22 @@ import javax.swing.JList;
 import javax.swing.JPanel;
 import javax.swing.JRadioButton;
 import javax.swing.JScrollPane;
+import javax.swing.JTextField;
 import javax.swing.WindowConstants;
+import javax.swing.event.DocumentEvent;
+import javax.swing.event.DocumentListener;
 
-class DeltaGeneSettings implements ActionListener {
+class DeltaGeneSettings implements ActionListener, DocumentListener {
 	private JDialog fileWindow;
 	JRadioButton latestButton;
 	JRadioButton versionButton;
-	TreeMap<String, String> hpoBuildMap;
-	JList<Object> jlist;
+	LinkedHashMap<String, String> hpoBuildMap;
+	LinkedHashMap<String, String> assocBuildMap;
+	JPanel selectionContainer;
+	JTextField hposearch;
+	JList<Object> hpolist;
+	JTextField assocsearch;
+	JList<Object> assoclist;
 	JCheckBox saveCheckbox;
 	private String selectedHPO;
 	private String selectedAssoc;
@@ -63,9 +77,10 @@ class DeltaGeneSettings implements ActionListener {
 		fileWindow.setDefaultCloseOperation(WindowConstants.DISPOSE_ON_CLOSE);
 		fileWindow.setPreferredSize(new Dimension(400,600));
 		fileWindow.setContentPane(new JPanel(new GridBagLayout()));
-		GridBagConstraints c = new GridBagConstraints();
 		ButtonGroup buttonGroup;
-		JScrollPane fwjsp = new JScrollPane();
+		JScrollPane hpojsp;
+		JScrollPane assocjsp = new JScrollPane();
+		GridBagConstraints c = new GridBagConstraints();
 		JButton confirmButton;
 		
 		buttonGroup = new ButtonGroup();
@@ -87,14 +102,53 @@ class DeltaGeneSettings implements ActionListener {
 		c.weightx = 1;
 		c.weighty = 0.05;
 		fileWindow.getContentPane().add(versionButton, c);
-		hpoBuildMap = getHpoBuildList();
-		jlist = new JList<Object>(hpoBuildMap.keySet().toArray());
-		jlist.setEnabled(false);
-		fwjsp.setViewportView(jlist);
+		
+		selectionContainer = new JPanel(new GridBagLayout());
 		c.gridy = 2;
 		c.weightx = 1;
-		c.weighty = 1;
-		fileWindow.getContentPane().add(fwjsp, c);
+		c.weighty = 0.9;
+		fileWindow.getContentPane().add(selectionContainer, c);
+		
+		hposearch = new JTextField();
+		hposearch.getDocument().addDocumentListener(this);
+		c.fill = GridBagConstraints.HORIZONTAL;
+		c.gridy = 0;
+		c.weightx = 1;
+		c.weighty = 0.05;
+		selectionContainer.add(hposearch,c);
+		
+		hpoBuildMap = getHpoBuildList("");
+		hpolist = new JList<Object>(hpoBuildMap.values().toArray());
+		hpolist.setSelectionMode(DefaultListSelectionModel.SINGLE_SELECTION);
+		hpojsp = new JScrollPane();
+		hpojsp.setViewportView(hpolist);
+		c.fill = GridBagConstraints.BOTH;
+		c.gridy = 1;
+		c.weightx = 1;
+		c.weighty = 0.45;
+		selectionContainer.add(hpojsp, c);
+		
+		assocsearch = new JTextField();
+		assocsearch.getDocument().addDocumentListener(this);
+		c.fill = GridBagConstraints.HORIZONTAL;
+		c.gridy = 2;
+		c.weightx = 1;
+		c.weighty = 0.05;
+		selectionContainer.add(assocsearch,c);
+		
+		assocBuildMap = getAssocBuildList("");
+		assoclist = new JList<Object>(assocBuildMap.values().toArray());
+		assoclist.setSelectionMode(DefaultListSelectionModel.SINGLE_SELECTION);
+		assocjsp = new JScrollPane();
+		assocjsp.setViewportView(assoclist);
+		c.fill = GridBagConstraints.BOTH;
+		c.gridy = 3;
+		c.weightx = 1;
+		c.weighty = 0.45;
+		selectionContainer.add(assocjsp, c);
+		
+		enableComponents(selectionContainer, false);
+		
 		saveCheckbox = new JCheckBox("Save these settings");
 		c.gridy = 3;
 		c.weightx = 1;
@@ -114,7 +168,7 @@ class DeltaGeneSettings implements ActionListener {
 		fileWindow.setVisible(true);
 	}
 	
-	private TreeMap<String, String> getHpoBuildList() {
+	private LinkedHashMap<String, String> getHpoBuildList(String search) {
 		URL url;
 		String[] json;
 		String buildnum;
@@ -123,7 +177,7 @@ class DeltaGeneSettings implements ActionListener {
 		DateFormat datetime = new SimpleDateFormat("HH:mm:ss dd-MM-yyyy"); 
 		Pattern regx = Pattern.compile(".*number\":(\\d*).*timestamp\":(\\d*).*revision\":(\\d*).*");
 		Matcher matcher;
-		TreeMap<String, String> out = new TreeMap<String, String>();
+		LinkedHashMap<String, String> out = new LinkedHashMap<String, String>();
 		
 		try {
 			url = new URL("http://compbio.charite.de/hudson/job/hpo/api/json?depth=1&tree=builds[number,timestamp,result,changeSet[revisions[revision]]]");
@@ -135,7 +189,43 @@ class DeltaGeneSettings implements ActionListener {
 						buildnum = matcher.group(1);
 						timestamp = new Date(Long.parseLong(matcher.group(2)));
 						revision = matcher.group(3);
-						out.put("Revision "+revision+" - "+datetime.format(timestamp), buildnum);
+						if (revision.startsWith(search)) {
+							out.put(buildnum, "Revision "+revision+" - "+datetime.format(timestamp));
+						}
+					}
+				} 
+			}
+			return out;
+		} catch (Exception e) {
+			e.printStackTrace();
+			return null;
+		}
+	}
+	
+	private LinkedHashMap<String, String> getAssocBuildList(String search) {
+		URL url;
+		String[] json;
+		String buildnum;
+		Date timestamp;
+		String revision;
+		DateFormat datetime = new SimpleDateFormat("HH:mm:ss dd-MM-yyyy"); 
+		Pattern regx = Pattern.compile(".*number\":(\\d*).*timestamp\":(\\d*).*revision\":(\\d*).*");
+		Matcher matcher;
+		LinkedHashMap<String, String> out = new LinkedHashMap<String, String>();
+		
+		try {
+			url = new URL("http://compbio.charite.de/hudson/job/hpo.annotations.monthly/api/json?depth=1&tree=builds[number,timestamp,result,changeSet[revisions[revision]]]");
+			json = convertStreamToString(url.openStream()).split("(\\},\\{)");
+			for (String build : json) {
+				if (build.contains("SUCCESS")) {
+					matcher = regx.matcher(build);
+					if (matcher.matches()) {
+						buildnum = matcher.group(1);
+						timestamp = new Date(Long.parseLong(matcher.group(2)));
+						revision = matcher.group(3);
+						if (revision.startsWith(search)) {
+							out.put(buildnum, "Revision "+revision+" - "+datetime.format(timestamp));
+						}
 					}
 				} 
 			}
@@ -167,18 +257,29 @@ class DeltaGeneSettings implements ActionListener {
 	    return buffer.toString();
 	}
 
+	
+	public void enableComponents(Container container, boolean enable) {
+		Component[] components = container.getComponents();
+		for (Component component : components) {
+			component.setEnabled(enable);
+			if (component instanceof Container) {
+			    enableComponents((Container)component, enable);
+			}
+		}
+	}
+	
 	@Override
 	public void actionPerformed(ActionEvent e) {
 		if (e.getActionCommand() == "versionRadio") {
-			jlist.setEnabled(true);
+			enableComponents(selectionContainer, true);
 		}
 		if (e.getActionCommand() == "latestRadio") {
-			jlist.setEnabled(false);
+			enableComponents(selectionContainer, false);
 		}
 		if (e.getActionCommand() == "confirm") {
 			if (versionButton.isSelected()) {
 				selectedAssoc = "latest";
-				selectedHPO = hpoBuildMap.get(jlist.getSelectedValue());
+				selectedHPO = hpoBuildMap.get(hpolist.getSelectedValue());
 			}if (latestButton.isSelected()) {
 				selectedAssoc = "latest";
 				selectedHPO = "latest";
@@ -231,6 +332,9 @@ class DeltaGeneSettings implements ActionListener {
 	}
 
 	public void changeSettings() {
+		if (settingsFile.exists()) {
+			settingsFile.delete();
+		}
 		showFileWindow(WindowConstants.DISPOSE_ON_CLOSE);
 	}
 
@@ -240,5 +344,23 @@ class DeltaGeneSettings implements ActionListener {
 	
 	public String getAssocVersion() {
 		return selectedAssoc;
+	}
+
+	@Override
+	public void insertUpdate(DocumentEvent e) {
+		if (e.getDocument() == hposearch.getDocument()) {
+			hpolist.setListData(getHpoBuildList(hposearch.getText()).values().toArray());
+		}if (e.getDocument() == assocsearch.getDocument()) {
+			assoclist.setListData(getHpoBuildList(assocsearch.getText()).values().toArray());
+		}
+	}
+
+	@Override
+	public void removeUpdate(DocumentEvent e) {
+		insertUpdate(e);
+	}
+
+	@Override
+	public void changedUpdate(DocumentEvent e) {
 	}
 }
