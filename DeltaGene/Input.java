@@ -363,7 +363,7 @@ class Input {
 	
 	class HPOFile {
 		private File hpoFile;
-		private File associationFile;
+		private File assocFile;
 		private File directory = new File(".\\HPO\\");
 		private int downloaded = 0;
 		public final int STATE_FAIL = -1;
@@ -381,8 +381,27 @@ class Input {
 		}
 		
 		public void loadFiles() {
+			// check if HPO folder exists
+			if (!directory.exists()) {
+				// If not, Try to create the HPO directory in the applets' folder
+				if (!directory.mkdir()) {
+					// show error to user in case something goes wrong. Should not happen.
+					new Error("Could not make HPO files directory.\n"
+							+ "Try launching the application as administrator.", 
+							"IO Error",
+							JFrame.EXIT_ON_CLOSE);
+					return;
+				}
+			}
+			loadHPO(deltaGeneSettings.getHPOVersion());
+			loadAssoc(deltaGeneSettings.getAssocVersion());
+
+			state = STATE_READY;
+		}
+		
+		private void loadHPO(String build) {
 			try {
-				File[] oldfiles;
+				File[] otherfiles;
 				String json;
 				String buffer;
 				URL jsonurl;
@@ -393,126 +412,143 @@ class Input {
 				/* 	Since we will be searching for the timestamp in filenames and text,
 				we will not be using a Long or Date variable. */
 				String timestamp;
+				int tsindex;
 				long start, stop, time;
 				
 				start = System.currentTimeMillis();
 				
-				// This URL points to the JSON file used to retrieve the timestamp
-				jsonurl = new URL("http://compbio.charite.de/"
-						+ "hudson/job/hpo/lastStableBuild/api/json");
+				if (build.equals("latest")) {
+					jsonurl = new URL("http://compbio.charite.de/"
+							+ "hudson/job/hpo/lastStableBuild/api/json?tree=timestamp");
+					fileurl = new URL("http://compbio.charite.de/hudson/job/"
+							+ "hpo/lastStableBuild/artifact/hp/hp.obo");
+				}else{
+					jsonurl = new URL("http://compbio.charite.de/"
+							+ "hudson/job/hpo/"+build+"/api/json?tree=timestamp");
+					fileurl = new URL("http://compbio.charite.de/hudson/job/"
+							+ "hpo/"+build+"/artifact/hp/hp.obo");
+				}
 				
 				// convertStreamToString loads the JSON in a string.
-				// the JSON file is ~1100 characters long.
 				json = convertStreamToString(jsonurl.openStream());
-				int tsindex = json.indexOf("timestamp\":")+"timestamp\":".length();
-				timestamp = json.substring(tsindex,  json.indexOf(",\"url"));
+				tsindex = json.indexOf("timestamp\":")+"timestamp\":".length();
+				timestamp = json.substring(tsindex,  json.indexOf('}'));
+				hpoFile = new File(".\\HPO\\"+timestamp+".obo");
+				// check if HPO file with this timestamp already exists
 				
-				// check if HPO folder exists
-				if (!directory.exists()) {
-					// If not, Try to create the HPO directory in the applets' folder
-					if (!directory.mkdir()) {
-						// show error to user in case something goes wrong. Should not happen.
-						new Error("Could not make HPO files directory.\n"
-								+ "Try launching the application as administrator.", 
-								"IO Error",
-								JFrame.EXIT_ON_CLOSE);
-						return;
-					}
-				}
-				hpoFile = new File(".\\HPO\\override.obo");
-				
-				// check if override HPO file exists
 				if (!hpoFile.exists()) {
-					hpoFile = new File(".\\HPO\\"+timestamp+".obo");
-					// check if HPO file with this timestamp already exists
-					if (!hpoFile.exists()) {
-						state = STATE_DOWNLOAD_HPO;
-						// oldhpo will contain the filenames for all files in the HPO directory 
-						oldfiles = directory.listFiles();
-						
-						for (File file : oldfiles) {
-							if (file.getName().endsWith(".obo")) 
-								if (!file.getName().startsWith(timestamp))
-									file.delete();
-						}
-						
-						// Create the file if it does not exist
-						hpoFile.createNewFile();
-						
-						/* 
-						 * From here, the method will download the HPO number database from
-						 * the file pointed to by 'hpourl' and put it in 'hpofile'
-						 */
-						fileurl = new URL("http://compbio.charite.de/hudson/job/"
-								+ "hpo/lastStableBuild/artifact/hp/hp.obo");
-						out = new FileWriter(hpoFile);
-						istream =	fileurl.openConnection().getInputStream(); 
-						in = new BufferedReader(new InputStreamReader(istream));
-						while ((buffer = in.readLine()) != null) { 
-							out.write(buffer+"\n");
-							downloaded += buffer.length();
-						}
-						out.close();
+					state = STATE_DOWNLOAD_HPO;
+					// oldhpo will contain the filenames for all files in the HPO directory 
+					otherfiles = directory.listFiles();
+					
+					for (File file : otherfiles) {
+						if (file.getName().endsWith(".obo")) 
+							if (!file.getName().equals(timestamp))
+								file.delete();
 					}
+					
+					// Create the file if it does not exist
+					hpoFile.createNewFile();
 				}
+				
+				/* 
+				 * From here, the method will download the HPO number database from
+				 * the file pointed to by 'hpourl' and put it in 'hpofile'
+				 */
+				out = new FileWriter(hpoFile);
+				istream =	fileurl.openConnection().getInputStream(); 
+				in = new BufferedReader(new InputStreamReader(istream));
+				while ((buffer = in.readLine()) != null) { 
+					out.write(buffer+"\n");
+					downloaded += buffer.length();
+				}
+				out.close();
 				stop = System.currentTimeMillis();
 				time = stop - start;
 				System.out.println("(Down)loading the HPO file took "+time+" millis");
 				
+				return;
+			}catch (IOException e){
+				state = STATE_FAIL;
+				e.printStackTrace();
+				new Error(Error.UNDEF_ERROR, Error.UNDEF_ERROR_T,
+						WindowConstants.EXIT_ON_CLOSE);
+			}
+		}
+		
+		private void loadAssoc(String build) {
+			try {
+				File[] otherfiles;
+				String json;
+				String buffer;
+				URL jsonurl;
+				URL fileurl;
+				BufferedReader in;
+				InputStream istream;
+				FileWriter out;
+				/* 	Since we will be searching for the timestamp in filenames and text,
+				we will not be using a Long or Date variable. */
+				String timestamp;
+				int tsindex;
+				long start, stop, time;
+				
 				start = System.currentTimeMillis();
 				
-				jsonurl = new URL("http://compbio.charite.de/hudson/"
-						+ "job/hpo.annotations.monthly/lastStableBuild/api/json");
+				if (build.equals("latest")) {
+					jsonurl = new URL("http://compbio.charite.de/hudson/"
+							+ "job/hpo.annotations.monthly/lastStableBuild/api/json?tree=timestamp");
+					fileurl = new URL("http://compbio.charite.de/hudson/job/"
+							+ "hpo.annotations.monthly/lastStableBuild/artifact/"
+							+ "annotation/ALL_SOURCES_ALL_FREQUENCIES_"
+							+ "diseases_to_genes_to_phenotypes.txt");
+				}else{
+					jsonurl = new URL("http://compbio.charite.de/hudson/"
+							+ "job/hpo.annotations.monthly/"+build+"/api/json?tree=timestamp");
+					fileurl = new URL("http://compbio.charite.de/hudson/job/"
+							+ "hpo.annotations.monthly/"+build+"/artifact/"
+							+ "annotation/ALL_SOURCES_ALL_FREQUENCIES_"
+							+ "diseases_to_genes_to_phenotypes.txt");
+				}
+				
+				// convertStreamToString loads the JSON in a string.
 				json = convertStreamToString(jsonurl.openStream());
 				tsindex = json.indexOf("timestamp\":")+"timestamp\":".length();
-				timestamp = json.substring(tsindex, json.indexOf(",\"url"));
+				timestamp = json.substring(tsindex,  json.indexOf("}"));
 				
-				associationFile = new File(".\\HPO\\override.assoc");
+				assocFile = new File(".\\HPO\\override.assoc");
+				// check if HPO file with this timestamp already exists
 				
-				// check if override association file exists
-				if (!associationFile.exists()) {
-					// check if association file with this timestamp already exists
-					associationFile = new File(".\\HPO\\"+timestamp+".assoc");
-					if (!associationFile.exists()) {
-						state = STATE_DOWNLOAD_ASSOC;
-						/* 
-						 * dggui.down contains the number of bytes that have been downloaded
-						 * and will be displayed on the applet when it is downloading the files,
-						 * to indicate some progress is being made.
-						 */
-						downloaded = 0;
-						
-						// oldfiles will contain the filenames for all files in the HPO directory 
-						oldfiles = directory.listFiles();
-						
-						for (File file : oldfiles) {
-							if (file.getName().endsWith(".assoc")) 
-								if (!file.getName().startsWith(timestamp))
-									file.delete();
-						}
-						
-						// Create the file if it does not exist
-		
-						associationFile.createNewFile();
-						fileurl = new URL("http://compbio.charite.de/hudson/job/"
-								+ "hpo.annotations.monthly/lastStableBuild/artifact/"
-								+ "annotation/ALL_SOURCES_ALL_FREQUENCIES_"
-								+ "diseases_to_genes_to_phenotypes.txt");
-						out = new FileWriter(associationFile);
-						istream = fileurl.openConnection().getInputStream(); 
-						in = new BufferedReader(
-								new InputStreamReader(istream));
-						while ((buffer = in.readLine()) != null) { 
-							out.write(buffer+"\n");
-							downloaded += buffer.length();
-						}
-						out.close();
+				if (!assocFile.exists()) {
+					state = STATE_DOWNLOAD_HPO;
+					// oldhpo will contain the filenames for all files in the HPO directory 
+					otherfiles = directory.listFiles();
+					
+					for (File file : otherfiles) {
+						if (file.getName().endsWith(".assoc")) 
+							if (!file.getName().startsWith(timestamp))
+								file.delete();
 					}
-					stop = System.currentTimeMillis();
-					time = stop - start;
-					System.out.println("(Down)loading association files took "+time+"millis");
+					
+					// Create the file if it does not exist
+					hpoFile.createNewFile();
 				}
-				state = STATE_READY;
+				
+				/* 
+				 * From here, the method will download the HPO number database from
+				 * the file pointed to by 'hpourl' and put it in 'hpofile'
+				 */
+				out = new FileWriter(assocFile);
+				istream =	fileurl.openConnection().getInputStream(); 
+				in = new BufferedReader(new InputStreamReader(istream));
+				while ((buffer = in.readLine()) != null) { 
+					out.write(buffer+"\n");
+					downloaded += buffer.length();
+				}
+				out.close();
+				stop = System.currentTimeMillis();
+				time = stop - start;
+				System.out.println("(Down)loading the annotations file took "+time+" millis");
+				
 				return;
 			}catch (IOException e){
 				state = STATE_FAIL;
@@ -544,7 +580,7 @@ class Input {
 		}
 		
 		public File getAssocFile() {
-			return associationFile;
+			return assocFile;
 		}
 		
 		public int getDown() {

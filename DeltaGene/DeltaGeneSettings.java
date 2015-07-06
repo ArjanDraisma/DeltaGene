@@ -47,24 +47,16 @@ class DeltaGeneSettings implements ActionListener {
 	DeltaGeneSettings(JFrame owner) {
 		fileWindow = new JDialog(owner, "Choose HPO version", Dialog.ModalityType.APPLICATION_MODAL);
 		settingsFile = new File(".\\settings.txt");
-		if (settingsExist()) {
-			selectedHPO = parseSetting("hpofile");
-			selectedAssoc = parseSetting("assocfile");
-		}else{
+		if (!settingsExist()) {
 			showFileWindow(WindowConstants.DISPOSE_ON_CLOSE);
+		}else{
+			selectedHPO = getSetting("hpofile");
+			selectedAssoc = getSetting("assocfile");
 		}
 	}
 	
 	public boolean settingsExist() {
 		return settingsFile.exists();
-	}
-	
-	public String getHPOBuild() {
-		return selectedHPO;
-	}
-	
-	public String getAssocBuild() {
-		return selectedAssoc;
 	}
 	
 	public void showFileWindow(int actionOnClose) {
@@ -184,8 +176,13 @@ class DeltaGeneSettings implements ActionListener {
 			jlist.setEnabled(false);
 		}
 		if (e.getActionCommand() == "confirm") {
-			selectedAssoc = "-1";
-			selectedHPO = hpoBuildMap.get(jlist.getSelectedValue());
+			if (versionButton.isSelected()) {
+				selectedAssoc = "latest";
+				selectedHPO = hpoBuildMap.get(jlist.getSelectedValue());
+			}if (latestButton.isSelected()) {
+				selectedAssoc = "latest";
+				selectedHPO = "latest";
+			}
 			if (saveCheckbox.isSelected()) {
 				createSettingsFile();
 			}
@@ -193,13 +190,13 @@ class DeltaGeneSettings implements ActionListener {
 		}
 	}
 	
-	private String parseSetting(String key) {
+	private String getSetting(String key) {
 		try (BufferedReader br = new BufferedReader(new FileReader(settingsFile))) {
 		    String line;
 		    while ((line = br.readLine()) != null) {
 		       if (!line.startsWith("#")) {
 		    	  String[] properties = line.split("=");
-		    	  if (properties[0] == key) {
+		    	  if (properties[0].equals(key)) {
 		    		  return properties[1];
 		    	  }
 		       }
@@ -219,13 +216,13 @@ class DeltaGeneSettings implements ActionListener {
 			settingsFile.createNewFile();
 			System.out.println("happening");
 			FileWriter fw = new FileWriter(settingsFile);
-			fw.append("#DeltaGene settings file\n");
+			fw.append("#DeltaGene settings file\n\r");
 			if (versionButton.isSelected()) {
-				fw.append("hpofile="+selectedHPO);
-				fw.append("assocfile="+selectedAssoc);
+				fw.append("hpofile="+selectedHPO+"\n\r");
+				fw.append("assocfile="+selectedAssoc+"\n\r");
 			}else{
-				fw.append("hpofile=-1");
-				fw.append("assocfile=-1");
+				fw.append("hpofile=latest\n\r");
+				fw.append("assocfile=latest\n\r");
 			}
 			fw.close();
 		} catch (IOException e) {
@@ -235,5 +232,13 @@ class DeltaGeneSettings implements ActionListener {
 
 	public void changeSettings() {
 		showFileWindow(WindowConstants.DISPOSE_ON_CLOSE);
+	}
+
+	public String getHPOVersion() {
+		return selectedHPO;
+	}
+	
+	public String getAssocVersion() {
+		return selectedAssoc;
 	}
 }
