@@ -129,7 +129,7 @@ class DeltaGene {
 			 * Could happen when something interrupts invokeAndWait above,
 			 * is not expected to ever happen.
 			 */
-			new Error(Error.UNDEF_ERROR,Error.UNDEF_ERROR_T, WindowConstants.EXIT_ON_CLOSE);
+			new Error(null, Error.UNDEF_ERROR,Error.UNDEF_ERROR_T, WindowConstants.EXIT_ON_CLOSE);
 		}
 	}
 }

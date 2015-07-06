@@ -100,7 +100,7 @@ public class Gui extends Thread implements ActionListener, ItemListener {
 					content.setPage(e.getURL());
 				}
 			}catch (IOException ioe) {
-				new Error(Error.IO_ERROR, Error.IO_ERROR_T, WindowConstants.DISPOSE_ON_CLOSE);
+				new Error(mainWindow, Error.IO_ERROR, Error.IO_ERROR_T, WindowConstants.DISPOSE_ON_CLOSE);
 				ioe.printStackTrace();
 			}
 		}
@@ -125,7 +125,8 @@ public class Gui extends Thread implements ActionListener, ItemListener {
 				 * Considering the help files are packed into the .jar, this really
 				 * should not happen.
 				 */
-				new Error("Could not open help files.", 
+				new Error(mainWindow, 
+						"Could not open help files.", 
 						"Help error",
 						WindowConstants.DISPOSE_ON_CLOSE);
 				e.printStackTrace();
@@ -185,7 +186,8 @@ public class Gui extends Thread implements ActionListener, ItemListener {
 						try {
 							Thread.sleep(50);
 						} catch (InterruptedException e) {
-							new Error(Error.UNDEF_ERROR, Error.UNDEF_ERROR_T,
+							new Error(mainWindow, 
+									Error.UNDEF_ERROR, Error.UNDEF_ERROR_T,
 									WindowConstants.DISPOSE_ON_CLOSE);
 							e.printStackTrace();
 						}
@@ -390,7 +392,8 @@ public class Gui extends Thread implements ActionListener, ItemListener {
 						try {
 							Thread.sleep(50);
 						}catch (InterruptedException e) {
-							new Error(Error.CRIT_ERROR, Error.CRIT_ERROR_T,
+							new Error(mainWindow, 
+									Error.CRIT_ERROR, Error.CRIT_ERROR_T,
 									WindowConstants.EXIT_ON_CLOSE, e);
 							e.printStackTrace();
 						}

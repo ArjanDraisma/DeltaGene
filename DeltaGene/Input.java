@@ -386,7 +386,7 @@ class Input {
 				// If not, Try to create the HPO directory in the applets' folder
 				if (!directory.mkdir()) {
 					// show error to user in case something goes wrong. Should not happen.
-					new Error("Could not make HPO files directory.\n"
+					new Error(parentWindow, "Could not make HPO files directory.\n"
 							+ "Try launching the application as administrator.", 
 							"IO Error",
 							JFrame.EXIT_ON_CLOSE);
@@ -471,7 +471,8 @@ class Input {
 			}catch (IOException e){
 				state = STATE_FAIL;
 				e.printStackTrace();
-				new Error(Error.UNDEF_ERROR, Error.UNDEF_ERROR_T,
+				new Error(null,
+						Error.UNDEF_ERROR, Error.UNDEF_ERROR_T,
 						WindowConstants.EXIT_ON_CLOSE);
 			}
 		}
@@ -553,7 +554,7 @@ class Input {
 			}catch (IOException e){
 				state = STATE_FAIL;
 				e.printStackTrace();
-				new Error(Error.UNDEF_ERROR, Error.UNDEF_ERROR_T,
+				new Error(null, Error.UNDEF_ERROR, Error.UNDEF_ERROR_T,
 						WindowConstants.EXIT_ON_CLOSE);
 			}
 		}
@@ -903,7 +904,7 @@ class Input {
 							try {
 								Thread.sleep(50);
 							} catch (InterruptedException e) {
-								new Error(Error.CRIT_ERROR, Error.CRIT_ERROR_T,
+								new Error(browserWindow, Error.CRIT_ERROR, Error.CRIT_ERROR_T,
 								WindowConstants.EXIT_ON_CLOSE, e);
 								e.printStackTrace();
 							}
@@ -1326,6 +1327,7 @@ class Input {
 		 * The data HashMap contains all instances of HPONumbers objects.
 		 * The key to each HPONumber is it's hpo id (HP:#######)
 		 */
+		private JFrame mainWindow;
 		private static HPOFile files;
 		private static HashMap<String, HPONumber> data = 
 				new HashMap<String, HPONumber>();
@@ -1338,7 +1340,8 @@ class Input {
 		private static int state;
 		private static HPONumber rootNode;
 		
-		HPOObject(HPOFile hpofile) {
+		HPOObject(JFrame mainWindow, HPOFile hpofile) {
+			this.mainWindow = mainWindow;
 			state = STATE_INIT;
 			files = hpofile;
 			rootNode = new HPONumber("HP:0000000", "Root",
@@ -1377,7 +1380,8 @@ class Input {
 				//inputinstance.notify();
 			}catch (InterruptedException e) {
 				e.printStackTrace();
-				new Error("A critical error occured! Try running the application as administrator.\n"
+				new Error(null,
+						"A critical error occured! Try running the application as administrator.\n"
 						+ "If the issue persists, report the issue with the data below: \n\n"
 						+ e.getStackTrace(), "Critical error", WindowConstants.EXIT_ON_CLOSE);
 				// TODO: Cleanup for these kinds of problems
@@ -1608,13 +1612,14 @@ class Input {
 			}
 			if (invalid)
 				if (HPOColumn == -1 || GeneColumn == -1) {
-					new Error("Error in parsing gene file. Please (re)move "
+					new Error(mainWindow, "Error in parsing gene file. Please (re)move "
 							+ " or replace the .assoc file in the /HPO/ "
 							+ "folder and try again.",
 							"Parse error",
 							WindowConstants.EXIT_ON_CLOSE);
 				}else{
-					new Error("Some genes were found with unknown HPO numbers,"
+					new Error(mainWindow, 
+							"Some genes were found with unknown HPO numbers,"
 							+ " the HPO data might be outdated or invalid.\n"
 							+ "Make sure your HPO files are up to date.\n\n"
 							+ "List of HPO numbers that occur in the .assoc "
@@ -1820,7 +1825,8 @@ class Input {
 						if (!file.createNewFile()) {
 							file.delete();
 							if (!file.createNewFile()) {
-								new Error("Could not create export file.", "Export error", WindowConstants.DISPOSE_ON_CLOSE);
+								new Error(reswindow,
+										"Could not create export file.", "Export error", WindowConstants.DISPOSE_ON_CLOSE);
 								return;
 							}
 						}
@@ -1843,7 +1849,7 @@ class Input {
 						}
 						outfile.close();
 					}else if (res == JFileChooser.ERROR_OPTION) {
-						new Error("An error occurred when choosing an export file", "Export error", WindowConstants.DISPOSE_ON_CLOSE);
+						new Error(reswindow, "An error occurred when choosing an export file", "Export error", WindowConstants.DISPOSE_ON_CLOSE);
 						return;
 					}
 				}catch (IOException e) {
@@ -1859,7 +1865,7 @@ class Input {
 			getHeaders(in);
 			generateResults(in);
 			if (results == null) {
-				new Error(getInputError(), "Result error", WindowConstants.DISPOSE_ON_CLOSE);
+				new Error(reswindow, getInputError(), "Result error", WindowConstants.DISPOSE_ON_CLOSE);
 				return;
 			}
 			showResults(results, headers);
@@ -1878,7 +1884,7 @@ class Input {
 			}
 			generateResults(hpo);
 			if (results == null) {
-				new Error(getInputError(), "Result error", WindowConstants.DISPOSE_ON_CLOSE);
+				new Error(reswindow, getInputError(), "Result error", WindowConstants.DISPOSE_ON_CLOSE);
 				return;
 			}
 			showResults(results, headers);
@@ -2617,7 +2623,7 @@ class Input {
 		inputs = new ArrayList<userinput>();
 		resultobject = new result();
 		HPOFILES = new HPOFile(deltaGeneSettings);
-		HPODATA = new HPOObject(HPOFILES);
+		HPODATA = new HPOObject(parentWindow, HPOFILES);
 	}
 	
 	void addInput(int count, int assignedgroup) {
@@ -2726,7 +2732,7 @@ class Input {
 					/* May mess up the window title, but should not 
 					 * do much else
 					 */
-					new Error(Error.UNDEF_ERROR, Error.UNDEF_ERROR_T, WindowConstants.DISPOSE_ON_CLOSE);
+					new Error(parentWindow, Error.UNDEF_ERROR, Error.UNDEF_ERROR_T, WindowConstants.DISPOSE_ON_CLOSE);
 					e.printStackTrace();
 				}
 				parentWindow.setTitle("DeltaGene");
@@ -2808,7 +2814,7 @@ class Input {
 
 	public void reload() {
 		HPOFILES = new HPOFile(deltaGeneSettings);
-		HPODATA = new HPOObject(HPOFILES);
+		HPODATA = new HPOObject(parentWindow, HPOFILES);
 		initialize(parentWindow, parentContainer);
 	}
 }

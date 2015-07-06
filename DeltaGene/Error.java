@@ -2,11 +2,17 @@ package DeltaGene;
 
 import java.awt.Button;
 import java.awt.Container;
+import java.awt.Dialog;
 import java.awt.Dimension;
+import java.awt.Frame;
+import java.awt.Window;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 
+import javafx.stage.Modality;
+
 import javax.swing.BoxLayout;
+import javax.swing.JDialog;
 import javax.swing.JFrame;
 import javax.swing.JScrollPane;
 import javax.swing.JTextArea;
@@ -18,7 +24,7 @@ import javax.swing.WindowConstants;
  * title, description of error and OK button.
  */
 public class Error implements ActionListener{
-	private JFrame errframe;		// This is the error window
+	private JDialog errframe;		// This is the error window
 	
 	public final static String UNDEF_ERROR = "An undefined error has occured.\n"
 			+ "Try running the program as an administrator and try again.";
@@ -40,8 +46,8 @@ public class Error implements ActionListener{
 	public final static String DEV_ERROR_T = "Critical / Developer error";
 	public final static String INPUT_ERROR_T = "Input error";
 	
-	private void show(String errmsg, String errtitle, int consequence) {
-		errframe = new JFrame(errtitle);
+	private void show(Window owner, String errmsg, String errtitle, int consequence) {
+		errframe = new JDialog(owner, errtitle, Dialog.ModalityType.APPLICATION_MODAL);
 		Container errcnt = new Container();
 		JTextArea errtxt = new JTextArea();
 		JScrollPane errtxtsp = new JScrollPane(errtxt);
@@ -81,11 +87,11 @@ public class Error implements ActionListener{
 		errframe.setVisible(true);
 	}
 	
-	Error(String errmsg, String errtitle, int consequence, Exception e) {
+	Error(Window owner, String errmsg, String errtitle, int consequence, Exception e) {
 		if (errmsg == CRIT_ERROR && errtitle == CRIT_ERROR_T) {
 			errmsg+=e.getStackTrace();
 		}
-		show(errmsg, errtitle, consequence);
+		show(owner, errmsg, errtitle, consequence);
 	}
 	
 	/**
@@ -95,12 +101,12 @@ public class Error implements ActionListener{
 	 * @param errtitle the error title
 	 * @param consequence from WindowConstants
 	 */
-	Error(String errmsg, String errtitle, int consequence) {
+	Error(Window owner, String errmsg, String errtitle, int consequence) {
 		if (errmsg == CRIT_ERROR || errtitle == CRIT_ERROR_T) {
 			errmsg = DEV_ERROR;
 			errtitle = DEV_ERROR_T;
 		}
-		show(errmsg, errtitle, consequence);
+		show(owner, errmsg, errtitle, consequence);
 	}
 
 	@Override
