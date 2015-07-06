@@ -121,7 +121,7 @@ class DeltaGene {
 				});
 			}else{
 				// TODO print command line output, export to file
-				Input dgi = new Input(a, b, e, fh, fa, enableGui, verbose);
+				Input dgi = new Input(a, b, e, fh, fa, enableGui, verbose, null);
 			}
 		}catch (Exception e) {
 			e.printStackTrace();

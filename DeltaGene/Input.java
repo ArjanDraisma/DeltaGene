@@ -58,17 +58,30 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.net.MalformedURLException;
 import java.net.URL;
+import java.text.DateFormat;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Date;
 import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Hashtable;
+import java.util.Iterator;
+import java.util.LinkedList;
+import java.util.SortedMap;
 import java.util.Stack;
 import java.util.TreeMap;
+import java.util.Vector;
 import java.util.concurrent.Callable;
 import java.util.concurrent.Future;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+import javafx.collections.transformation.SortedList;
+import javafx.scene.Group;
 
 import javax.swing.event.DocumentListener;
 import javax.swing.event.DocumentEvent;
@@ -83,17 +96,21 @@ import javax.swing.tree.ExpandVetoException;
 import javax.swing.tree.TreeModel;
 import javax.swing.tree.TreeNode;
 import javax.swing.tree.TreePath;
+import javax.swing.ButtonGroup;
 import javax.swing.JButton;
+import javax.swing.JCheckBox;
 import javax.swing.JEditorPane;
 import javax.swing.JFileChooser;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
+import javax.swing.JList;
 import javax.swing.JMenu;
 import javax.swing.JMenuBar;
 import javax.swing.JMenuItem;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JPopupMenu;
+import javax.swing.JRadioButton;
 import javax.swing.JScrollPane;
 import javax.swing.JTable;
 import javax.swing.JTextArea;
@@ -355,13 +372,15 @@ class Input {
 		public final int STATE_DOWNLOAD_ASSOC = 2;
 		public final int STATE_READY = 3;
 		private int state;
+		DeltaGeneSettings deltaGeneSettings;
 		
 		
-		HPOFile() {
+		HPOFile(DeltaGeneSettings deltaGeneSettings) {
+			this.deltaGeneSettings = deltaGeneSettings;
 			state = STATE_INIT;
 		}
 		
-		public void LoadFiles() {
+		public void loadFiles() {
 			try {
 				File[] oldfiles;
 				String json;
@@ -1012,7 +1031,7 @@ class Input {
 				for (String gene : substring.split("[^A-Z0-9\\-]")) {
 					HPOListUnderGene = HpoData.getHPOFromGene(gene);
 					for (String hpoid : HPOListUnderGene) {
-						
+						hpoid = null;
 					}
 				}
 			}
@@ -1306,9 +1325,9 @@ class Input {
 
 		public void build(Input inputinstance) {
 			try {
-				if (files.state != HPOFILES.STATE_READY) {
-					state = STATE_WAIT;
-					wait();
+				state = STATE_WAIT;
+				while (files.state != HPOFILES.STATE_READY) {
+					Thread.sleep(50);
 				}
 				state = STATE_LOAD_HPO;
 				populateHPOObject(files.getHPOFile());
@@ -1319,7 +1338,7 @@ class Input {
 				rootNode.addChild(data.get("HP:0000001"));
 				rootNode.setExpandedByDefault(true);
 				data.get("HP:0000001").setExpandedByDefault(true);
-				inputinstance.notify();
+				//inputinstance.notify();
 			}catch (InterruptedException e) {
 				e.printStackTrace();
 				new Error("A critical error occured! Try running the application as administrator.\n"
@@ -2537,8 +2556,8 @@ class Input {
 	
 	private static JFrame parentWindow;
 	private static Container parentContainer;
-	public static HPOObject HPODATA;
 	public static HPOFile HPOFILES;
+	public static HPOObject HPODATA;
 	public static ArrayList<userinput> inputs;
 	public static result resultobject;
 	Autocomplete ac;
@@ -2554,12 +2573,14 @@ class Input {
 	private static int OPERATOR = DEFAULT;
 	private String error;
 	private int state = STATE_INSTANTIATED;
+	DeltaGeneSettings deltaGeneSettings;
 	
 
-	Input(String aArg, String bArg, String e, String fh, String fa, boolean enableGui, boolean verbose) {
+	Input(String aArg, String bArg, String e, String fh, String fa, boolean enableGui, boolean verbose, DeltaGeneSettings deltaGeneSettings) {
+		this.deltaGeneSettings = deltaGeneSettings;
 		inputs = new ArrayList<userinput>();
 		resultobject = new result();
-		HPOFILES = new HPOFile();
+		HPOFILES = new HPOFile(deltaGeneSettings);
 		HPODATA = new HPOObject(HPOFILES);
 	}
 	
@@ -2716,7 +2737,7 @@ class Input {
 			}
 		}));
 		state = STATE_BUILDING;
-		HPOFILES.LoadFiles();
+		HPOFILES.loadFiles();
 		HPODATA.build(this);
 		state = STATE_READY;
 	}
@@ -2747,5 +2768,11 @@ class Input {
 	
 	public int getState() {
 		return state;
+	}
+
+	public void reload() {
+		HPOFILES = new HPOFile(deltaGeneSettings);
+		HPODATA = new HPOObject(HPOFILES);
+		initialize(parentWindow, parentContainer);
 	}
 }

@@ -44,8 +44,11 @@ import java.awt.event.ItemListener;
 import java.awt.FlowLayout;
 import java.awt.GridBagConstraints;
 import java.awt.Insets;
+import java.io.File;
 import java.io.IOException;
+import java.net.URISyntaxException;
 import java.net.URL;
+import java.util.ArrayList;
 
 import javax.swing.BorderFactory;
 import javax.swing.BoxLayout;
@@ -134,6 +137,7 @@ public class Gui extends Thread implements ActionListener, ItemListener {
 	}
 	
 	public static JFrame mainWindow; 
+	public static DeltaGeneSettings deltaGeneSettings;
 	public static Container contentContainer;	
 	public static Container inputContainer;
 	public int down;
@@ -145,6 +149,7 @@ public class Gui extends Thread implements ActionListener, ItemListener {
 	
 	// the constructor class builds the main window and adds the inputs
 	Gui () {
+		deltaGeneSettings = new DeltaGeneSettings(mainWindow);
 		createAndShowGUI();
 		showInputs();
 	}
@@ -194,6 +199,9 @@ public class Gui extends Thread implements ActionListener, ItemListener {
 			});
 		}if (e.getActionCommand().equals("about")) {
 			new HelpClass("about");
+		}if (e.getActionCommand().equals("settings")) {
+			deltaGeneSettings.changeSettings();
+			inputInstance.reload();
 		}if (e.getActionCommand().equals("exit")) {
 			System.exit(0);
 		}
@@ -211,8 +219,8 @@ public class Gui extends Thread implements ActionListener, ItemListener {
 		JMenuBar mainMenuBar = new JMenuBar();
 		// The filemenu contains the open and exit button
 		JMenu fileMenu = new JMenu("File");
-		JMenuItem exitMenuItem = new JMenuItem("Open");
-		JMenuItem openMenuItem = new JMenuItem("Exit");
+		JMenuItem settingsMenuItem = new JMenuItem("Settings");
+		JMenuItem exitMenuItem = new JMenuItem("Exit");
 		// The tools menu will contain the HPO Browser button
 		JMenu toolsMenuItem = new JMenu("Tools");
 		JMenuItem browserMenuItem = new JMenuItem("HPO Browser");
@@ -231,9 +239,9 @@ public class Gui extends Thread implements ActionListener, ItemListener {
 		contentContainer = new Container();
 		
 		// This adds all menus and their items to the menubar
-		mainMenuBar.add(fileMenu);						
-		fileMenu.add(exitMenuItem);	
-		fileMenu.add(openMenuItem);
+		mainMenuBar.add(fileMenu);
+		fileMenu.add(settingsMenuItem);				
+		fileMenu.add(exitMenuItem);
 		mainMenuBar.add(toolsMenuItem);
 		toolsMenuItem.add(browserMenuItem);
 		toolsMenuItem.add(formatMenuItem);
@@ -246,6 +254,8 @@ public class Gui extends Thread implements ActionListener, ItemListener {
 		 */
 		exitMenuItem.addActionListener(this);
 		exitMenuItem.setActionCommand("exit");
+		settingsMenuItem.addActionListener(this);
+		settingsMenuItem.setActionCommand("settings");
 		browserMenuItem.addActionListener(this);
 		browserMenuItem.setActionCommand("browser");
 		//browser.setEnabled(false);
@@ -293,7 +303,7 @@ public class Gui extends Thread implements ActionListener, ItemListener {
 		try {
 			// Before initializing
 			// Create an instance of the input class
-			inputInstance = new Input(null, null, null, null, null, true, false);
+			inputInstance = new Input(null, null, null, null, null, true, false, deltaGeneSettings);
 			// we use a springlayout for content
 			contentContainerLayout = new SpringLayout();
 			contentContainer.setLayout(contentContainerLayout);
