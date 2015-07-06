@@ -1,5 +1,7 @@
 package DeltaGene;
 
+import DeltaGene.Error;
+
 import java.awt.Component;
 import java.awt.Container;
 import java.awt.Dialog;
@@ -118,7 +120,7 @@ class DeltaGeneSettings implements ActionListener, DocumentListener {
 		selectionContainer.add(hposearch,c);
 		
 		hpoBuildMap = getHpoBuildList("");
-		hpolist = new JList<Object>(hpoBuildMap.values().toArray());
+		hpolist = new JList<Object>(hpoBuildMap.keySet().toArray());
 		hpolist.setSelectionMode(DefaultListSelectionModel.SINGLE_SELECTION);
 		hpojsp = new JScrollPane();
 		hpojsp.setViewportView(hpolist);
@@ -137,7 +139,7 @@ class DeltaGeneSettings implements ActionListener, DocumentListener {
 		selectionContainer.add(assocsearch,c);
 		
 		assocBuildMap = getAssocBuildList("");
-		assoclist = new JList<Object>(assocBuildMap.values().toArray());
+		assoclist = new JList<Object>(assocBuildMap.keySet().toArray());
 		assoclist.setSelectionMode(DefaultListSelectionModel.SINGLE_SELECTION);
 		assocjsp = new JScrollPane();
 		assocjsp.setViewportView(assoclist);
@@ -190,7 +192,7 @@ class DeltaGeneSettings implements ActionListener, DocumentListener {
 						timestamp = new Date(Long.parseLong(matcher.group(2)));
 						revision = matcher.group(3);
 						if (revision.startsWith(search)) {
-							out.put(buildnum, "Revision "+revision+" - "+datetime.format(timestamp));
+							out.put("Revision "+revision+" - "+datetime.format(timestamp), buildnum);
 						}
 					}
 				} 
@@ -224,7 +226,7 @@ class DeltaGeneSettings implements ActionListener, DocumentListener {
 						timestamp = new Date(Long.parseLong(matcher.group(2)));
 						revision = matcher.group(3);
 						if (revision.startsWith(search)) {
-							out.put(buildnum, "Revision "+revision+" - "+datetime.format(timestamp));
+							out.put("Revision "+revision+" - "+datetime.format(timestamp), buildnum);
 						}
 					}
 				} 
@@ -278,7 +280,13 @@ class DeltaGeneSettings implements ActionListener, DocumentListener {
 		}
 		if (e.getActionCommand() == "confirm") {
 			if (versionButton.isSelected()) {
-				selectedAssoc = "latest";
+				if (hpolist.getSelectedIndex() == -1 || assoclist.getSelectedIndex() == -1) {
+					new Error(fileWindow, "You must select both a HPO file and an annotation file.",
+							"Source file selection error",
+							WindowConstants.DISPOSE_ON_CLOSE);
+					return;
+				}
+				selectedAssoc = assocBuildMap.get(assoclist.getSelectedValue());
 				selectedHPO = hpoBuildMap.get(hpolist.getSelectedValue());
 			}if (latestButton.isSelected()) {
 				selectedAssoc = "latest";
@@ -349,9 +357,9 @@ class DeltaGeneSettings implements ActionListener, DocumentListener {
 	@Override
 	public void insertUpdate(DocumentEvent e) {
 		if (e.getDocument() == hposearch.getDocument()) {
-			hpolist.setListData(getHpoBuildList(hposearch.getText()).values().toArray());
+			hpolist.setListData(getHpoBuildList(hposearch.getText()).keySet().toArray());
 		}if (e.getDocument() == assocsearch.getDocument()) {
-			assoclist.setListData(getHpoBuildList(assocsearch.getText()).values().toArray());
+			assoclist.setListData(getHpoBuildList(assocsearch.getText()).keySet().toArray());
 		}
 	}
 
