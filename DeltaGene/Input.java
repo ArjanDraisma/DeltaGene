@@ -505,10 +505,18 @@ class Input {
 				}else{
 					jsonurl = new URL("http://compbio.charite.de/hudson/"
 							+ "job/hpo.annotations.monthly/"+build+"/api/json?tree=timestamp");
-					fileurl = new URL("http://compbio.charite.de/hudson/job/"
-							+ "hpo.annotations.monthly/"+build+"/artifact/"
-							+ "annotation/ALL_SOURCES_ALL_FREQUENCIES_"
-							+ "diseases_to_genes_to_phenotypes.txt");
+					// this is terrible
+					if (Integer.parseInt(build) < 33) {
+						fileurl = new URL("http://compbio.charite.de/hudson/job/"
+								+ "hpo.annotations.monthly/"+build+"/artifact/"
+								+ "annotation/"
+								+ "diseases_to_genes_to_phenotypes.txt");
+					}else{
+						fileurl = new URL("http://compbio.charite.de/hudson/job/"
+								+ "hpo.annotations.monthly/"+build+"/artifact/"
+								+ "annotation/ALL_SOURCES_ALL_FREQUENCIES_"
+								+ "diseases_to_genes_to_phenotypes.txt");
+					}
 				}
 				
 				// convertStreamToString loads the JSON in a string.
@@ -516,7 +524,7 @@ class Input {
 				tsindex = json.indexOf("timestamp\":")+"timestamp\":".length();
 				timestamp = json.substring(tsindex,  json.indexOf("}"));
 				
-				assocFile = new File(".\\HPO\\override.assoc");
+				assocFile = new File(".\\HPO\\"+timestamp+".assoc");
 				// check if HPO file with this timestamp already exists
 				
 				if (!assocFile.exists()) {
@@ -1621,7 +1629,8 @@ class Input {
 					new Error(mainWindow, 
 							"Some genes were found with unknown HPO numbers,"
 							+ " the HPO data might be outdated or invalid.\n"
-							+ "Make sure your HPO files are up to date.\n\n"
+							+ "Make sure your HPO files are within the same timeframe"
+							+ "as the annotation files.\n\n"
 							+ "List of HPO numbers that occur in the .assoc "
 							+ "file, but not in the .hpo file:\n\n"
 							+ invalidhpo.toString(),
@@ -2718,13 +2727,13 @@ class Input {
 				try { 
 					while (!HPOFILES.isReady()) {
 						Thread.sleep(50);
-						parentWindow.setTitle("DeltaGene - Downloading HPO/Association files ("+HPOFILES.getDown()+"kB)");
+						parentWindow.setTitle("DeltaGene - Downloading HPO/Annotation files ("+HPOFILES.getDown()+"kB)");
 					}
 					while (!HPODATA.isReady()) {
 						if (HPODATA.getState() == HPOObject.STATE_LOAD_HPO) {
 							parentWindow.setTitle("DeltaGene - Building HPO Database...");
 						}else if (HPODATA.getState() == HPOObject.STATE_LOAD_ASSOC){
-							parentWindow.setTitle("DeltaGene - Loading gene associations...");
+							parentWindow.setTitle("DeltaGene - Loading gene annotations...");
 						}
 						Thread.sleep(50);
 					}
