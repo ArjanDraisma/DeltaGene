@@ -1,9 +1,9 @@
 /*
  * Main class for DeltaGene
  * 
- * V1.0
+ * V1.1
  * 
- * 10-3-2015
+ * 14-7-2015
  * 
  * This is free and unencumbered software released into the public domain.
  * 
