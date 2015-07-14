@@ -449,25 +449,25 @@ class Input {
 					
 					// Create the file if it does not exist
 					hpoFile.createNewFile();
-				}
 				
-				/* 
-				 * From here, the method will download the HPO number database from
-				 * the file pointed to by 'hpourl' and put it in 'hpofile'
-				 */
-				out = new FileWriter(hpoFile);
-				istream =	fileurl.openConnection().getInputStream(); 
-				in = new BufferedReader(new InputStreamReader(istream));
-				while ((buffer = in.readLine()) != null) { 
-					out.write(buffer+"\n");
-					downloaded += buffer.length();
+					/* 
+					 * From here, the method will download the HPO number database from
+					 * the file pointed to by 'hpourl' and put it in 'hpofile'
+					 */
+					out = new FileWriter(hpoFile);
+					istream =	fileurl.openConnection().getInputStream(); 
+					in = new BufferedReader(new InputStreamReader(istream));
+					while ((buffer = in.readLine()) != null) { 
+						out.write(buffer+"\n");
+						downloaded += buffer.length();
+					}
+					out.close();
+					stop = System.currentTimeMillis();
+					time = stop - start;
+					System.out.println("(Down)loading the HPO file took "+time+" millis");
+					
+					return;
 				}
-				out.close();
-				stop = System.currentTimeMillis();
-				time = stop - start;
-				System.out.println("(Down)loading the HPO file took "+time+" millis");
-				
-				return;
 			}catch (IOException e){
 				state = STATE_FAIL;
 				e.printStackTrace();
@@ -540,25 +540,25 @@ class Input {
 					
 					// Create the file if it does not exist
 					hpoFile.createNewFile();
-				}
 				
-				/* 
-				 * From here, the method will download the HPO number database from
-				 * the file pointed to by 'hpourl' and put it in 'hpofile'
-				 */
-				out = new FileWriter(assocFile);
-				istream =	fileurl.openConnection().getInputStream(); 
-				in = new BufferedReader(new InputStreamReader(istream));
-				while ((buffer = in.readLine()) != null) { 
-					out.write(buffer+"\n");
-					downloaded += buffer.length();
+					/* 
+					 * From here, the method will download the HPO number database from
+					 * the file pointed to by 'hpourl' and put it in 'hpofile'
+					 */
+					out = new FileWriter(assocFile);
+					istream =	fileurl.openConnection().getInputStream(); 
+					in = new BufferedReader(new InputStreamReader(istream));
+					while ((buffer = in.readLine()) != null) { 
+						out.write(buffer+"\n");
+						downloaded += buffer.length();
+					}
+					out.close();
+					stop = System.currentTimeMillis();
+					time = stop - start;
+					System.out.println("(Down)loading the annotations file took "+time+" millis");
+					
+					return;
 				}
-				out.close();
-				stop = System.currentTimeMillis();
-				time = stop - start;
-				System.out.println("(Down)loading the annotations file took "+time+" millis");
-				
-				return;
 			}catch (IOException e){
 				state = STATE_FAIL;
 				e.printStackTrace();
