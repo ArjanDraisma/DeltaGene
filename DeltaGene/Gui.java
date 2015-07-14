@@ -399,6 +399,7 @@ public class Gui extends Thread implements ActionListener, ItemListener {
 						}
 					}
 					addButton.setEnabled(true);
+					removeButton.setEnabled(true);
 					clearButton.setEnabled(true);
 					submitButton.setEnabled(true);
 					inputInstance.addInput(1,0);
