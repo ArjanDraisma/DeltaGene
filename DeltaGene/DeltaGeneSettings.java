@@ -10,6 +10,8 @@ import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.awt.event.WindowAdapter;
+import java.awt.event.WindowEvent;
 import java.io.BufferedInputStream;
 import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
@@ -35,9 +37,11 @@ import javax.swing.JButton;
 import javax.swing.JCheckBox;
 import javax.swing.JDialog;
 import javax.swing.JFrame;
+import javax.swing.JLabel;
 import javax.swing.JList;
 import javax.swing.JPanel;
 import javax.swing.JRadioButton;
+import javax.swing.JRootPane;
 import javax.swing.JScrollPane;
 import javax.swing.JTextField;
 import javax.swing.WindowConstants;
@@ -76,9 +80,11 @@ class DeltaGeneSettings implements ActionListener, DocumentListener {
 	}
 	
 	public void showFileWindow(int actionOnClose) {
-		fileWindow.setDefaultCloseOperation(WindowConstants.DISPOSE_ON_CLOSE);
+		fileWindow.setDefaultCloseOperation(WindowConstants.DO_NOTHING_ON_CLOSE);
 		fileWindow.setPreferredSize(new Dimension(400,600));
 		fileWindow.setContentPane(new JPanel(new GridBagLayout()));
+		fileWindow.setUndecorated(false);
+		fileWindow.getRootPane().setWindowDecorationStyle(JRootPane.NONE);
 		ButtonGroup buttonGroup;
 		JScrollPane hpojsp;
 		JScrollPane assocjsp = new JScrollPane();
@@ -111,10 +117,13 @@ class DeltaGeneSettings implements ActionListener, DocumentListener {
 		c.weighty = 0.9;
 		fileWindow.getContentPane().add(selectionContainer, c);
 		
+		c.gridy = 0;
+		selectionContainer.add(new JLabel("HPO version:"), c);
+		
 		hposearch = new JTextField();
 		hposearch.getDocument().addDocumentListener(this);
 		c.fill = GridBagConstraints.HORIZONTAL;
-		c.gridy = 0;
+		c.gridy = 1;
 		c.weightx = 1;
 		c.weighty = 0.05;
 		selectionContainer.add(hposearch,c);
@@ -125,15 +134,18 @@ class DeltaGeneSettings implements ActionListener, DocumentListener {
 		hpojsp = new JScrollPane();
 		hpojsp.setViewportView(hpolist);
 		c.fill = GridBagConstraints.BOTH;
-		c.gridy = 1;
+		c.gridy = 2;
 		c.weightx = 1;
 		c.weighty = 0.45;
 		selectionContainer.add(hpojsp, c);
+
+		c.gridy = 3;
+		selectionContainer.add(new JLabel("Annotation version:"), c);
 		
 		assocsearch = new JTextField();
 		assocsearch.getDocument().addDocumentListener(this);
 		c.fill = GridBagConstraints.HORIZONTAL;
-		c.gridy = 2;
+		c.gridy = 4;
 		c.weightx = 1;
 		c.weighty = 0.05;
 		selectionContainer.add(assocsearch,c);
@@ -144,7 +156,7 @@ class DeltaGeneSettings implements ActionListener, DocumentListener {
 		assocjsp = new JScrollPane();
 		assocjsp.setViewportView(assoclist);
 		c.fill = GridBagConstraints.BOTH;
-		c.gridy = 3;
+		c.gridy = 5;
 		c.weightx = 1;
 		c.weighty = 0.45;
 		selectionContainer.add(assocjsp, c);
