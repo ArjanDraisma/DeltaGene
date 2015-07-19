@@ -203,7 +203,9 @@ class DeltaGeneSettings implements ActionListener, DocumentListener {
 						buildnum = matcher.group(1);
 						timestamp = new Date(Long.parseLong(matcher.group(2)));
 						revision = matcher.group(3);
-						if (revision.startsWith(search)) {
+						// filtering any build below # 980 is a hack that I promise is temporary
+						// any builds below this number do not have any artifacts
+						if (revision.startsWith(search) && Integer.parseInt(buildnum) > 979) {
 							out.put("Revision "+revision+" - "+datetime.format(timestamp), buildnum);
 						}
 					}

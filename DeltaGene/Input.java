@@ -453,7 +453,7 @@ class Input {
 				e.printStackTrace();
 				new Error(null,
 						Error.UNDEF_ERROR, Error.UNDEF_ERROR_T,
-						WindowConstants.EXIT_ON_CLOSE);
+						WindowConstants.DISPOSE_ON_CLOSE);
 			}
 		}
 		
@@ -1348,7 +1348,6 @@ class Input {
 				rootNode.addChild(data.get("HP:0000001"));
 				rootNode.setExpandedByDefault(true);
 				data.get("HP:0000001").setExpandedByDefault(true);
-				//inputinstance.notify();
 			}catch (InterruptedException e) {
 				e.printStackTrace();
 				new Error(null,
@@ -1549,39 +1548,46 @@ class Input {
 			
 			while ((line = in.readLine()) != null) {
 				// get column numbers for data
-				if (line.contains("#Format: ")) {
-					split = line.substring(9).split("<tab>");
-						for (int i = 0; i < split.length; i++) {
-							if (split[i].equals("HPO-ID")) {
-								HPOColumn = i;
-							}if (split[i].equals("gene-symbol")) {
-								GeneColumn = i;
+				if (!line.contains("#Format: ")) {
+					if (line.contains("HP:")) {
+						split = line.split("\t");
+						String col;
+
+						if (HPOColumn == -1 || GeneColumn == -1) {
+							for (int i = 0; i < split.length; i++) {
+								col = split[i];
+								if (col.matches("HP:[\\d]{7}")) {
+									HPOColumn = i;
+								}else if (col.matches("[A-Z][^a-z\\s\\t:]*")) {
+									GeneColumn = i;
+								}
 							}
 						}
-				}
-				// get data
-				if (line.contains("HP:") && HPOColumn > -1 && GeneColumn > -1) {
-					split = line.split("\t");
-					hpo = split[HPOColumn];
-					gene = split[GeneColumn];
-					if (data.containsKey(hpo)) {
-						data.get(hpo).addGene(gene);
-					}else{
-						/* if an HPO number does not exist, add it to the invalid
-						 * list and flag the association file for invalid
+						
+						hpo = split[HPOColumn];
+						gene = split[GeneColumn];
+						if (data.containsKey(hpo)) {
+							data.get(hpo).addGene(gene);
+						}else{
+							/* if an HPO number does not exist, add it to the invalid
+							 * list and flag the association file for invalid
+							 */
+							invalidhpo.append(hpo+"\n");
+							invalid = true;
+						}
+					}
+					if (data.size() == 0) {
+						/* if the entire data set is empty, something went wrong
+						 * in parsing the association file.
 						 */
-						invalidhpo.append(hpo+"\n");
 						invalid = true;
 					}
 				}
-				if (data.size() == 0) {
-					/* if the entire data set is empty, something went wrong
-					 * in parsing the association file.
-					 */
-					invalid = true;
-				}
 			}
-			if (invalid)
+			
+			in.close();
+			
+			if (invalid) {
 				if (HPOColumn == -1 || GeneColumn == -1) {
 					new Error(mainWindow, "Error in parsing gene file. Please (re)move "
 							+ " or replace the .assoc file in the /HPO/ "
@@ -1600,7 +1606,7 @@ class Input {
 							"Attention",
 							WindowConstants.DISPOSE_ON_CLOSE);
 				}
-			in.close();
+			}
 			stop = System.currentTimeMillis();
 			time = stop - start;
 			System.out.println("Populating gene list took "+time+" millis");
@@ -2539,8 +2545,9 @@ class Input {
 				break;
 			case 3:
 				infobox.setText("Type: List of genes. "
-						+ "<a href=\"findhpo\">Find HPO numbers associated "
-						+ "with genes</a>");
+					//	+ "<a href=\"findhpo\">Find HPO numbers associated "
+						//+ "with genes</a>"
+						+ "");
 				break;
 			case 4:
 				sb.append("Type: List of numbers (Parsed as HPO numbers):");
