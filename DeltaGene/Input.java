@@ -102,6 +102,8 @@ import javax.swing.SwingWorker;
 import javax.swing.UIManager;
 import javax.swing.WindowConstants;
 
+import DeltaGene.Input.HPOObject.HPONumber;
+
 /**
  * This class handles input from the user, generating headers and generating 
  * results.
@@ -810,7 +812,6 @@ class Input {
 			public final static int STATE_READY = 1;
 			
 			Browser (final HPOObject hpodata) {
-				
 				state = STATE_INIT;
 				browserWindow = new JFrame("HPO Browser");
 				browserControlPanel = new JPanel();
@@ -1299,8 +1300,8 @@ class Input {
 		 * The key to each HPONumber is it's hpo id (HP:#######)
 		 */
 		private JFrame mainWindow;
-		private static HPOFile files;
-		private static HashMap<String, HPONumber> data = 
+		private HPOFile files;
+		private HashMap<String, HPONumber> data = 
 				new HashMap<String, HPONumber>();
 		public Browser browser;
 		final static int STATE_INIT = 0;
@@ -1308,12 +1309,13 @@ class Input {
 		final static int STATE_LOAD_HPO = 2;
 		final static int STATE_LOAD_ASSOC = 3;
 		final static int STATE_READY = 4;
-		private static int state;
-		private static HPONumber rootNode;
+		private int state;
+		private HPONumber rootNode;
 		
 		HPOObject(JFrame mainWindow, HPOFile hpofile) {
 			this.mainWindow = mainWindow;
 			state = STATE_INIT;
+			browser = new Browser(this);
 			files = hpofile;
 			rootNode = new HPONumber("HP:0000000", "Root",
 					"Root node for the Human Phenotype Ontology");
@@ -1341,7 +1343,6 @@ class Input {
 				}
 				state = STATE_LOAD_HPO;
 				populateHPOObject(files.getHPOFile());
-				browser = new Browser(this);
 				state = STATE_LOAD_ASSOC;
 				populateHPOGenes(files.getAssocFile());
 				state = STATE_READY;
