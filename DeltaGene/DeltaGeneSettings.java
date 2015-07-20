@@ -23,9 +23,11 @@ import java.io.InputStream;
 import java.net.URL;
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 import java.util.regex.Matcher;
@@ -205,7 +207,7 @@ class DeltaGeneSettings implements ActionListener, DocumentListener {
 						revision = matcher.group(3);
 						// filtering any build below # 980 is a hack that I promise is temporary
 						// any builds below this number do not have any artifacts
-						if (revision.startsWith(search) && Integer.parseInt(buildnum) > 979) {
+						if (Integer.parseInt(buildnum) > 979) {
 							out.put("Revision "+revision+" - "+datetime.format(timestamp), buildnum);
 						}
 					}
@@ -239,9 +241,7 @@ class DeltaGeneSettings implements ActionListener, DocumentListener {
 						buildnum = matcher.group(1);
 						timestamp = new Date(Long.parseLong(matcher.group(2)));
 						revision = matcher.group(3);
-						if (revision.startsWith(search)) {
-							out.put("Revision "+revision+" - "+datetime.format(timestamp), buildnum);
-						}
+						out.put("Revision "+revision+" - "+datetime.format(timestamp), buildnum);
 					}
 				} 
 			}
@@ -371,10 +371,20 @@ class DeltaGeneSettings implements ActionListener, DocumentListener {
 	@Override
 	public void insertUpdate(DocumentEvent e) {
 		if (e.getDocument() == hposearch.getDocument()) {
-			hpolist.setListData(getHpoBuildList(hposearch.getText()).keySet().toArray());
+			hpolist.setListData(filterList(hpoBuildMap, hposearch.getText()).toArray());
 		}if (e.getDocument() == assocsearch.getDocument()) {
-			assoclist.setListData(getHpoBuildList(assocsearch.getText()).keySet().toArray());
+			assoclist.setListData(filterList(assocBuildMap, assocsearch.getText()).toArray());
 		}
+	}
+
+	private List<String> filterList(LinkedHashMap<String, String> map, String search) {
+		List<String> out = new ArrayList<String>();
+		for (String key : map.keySet()) {
+			if (key.startsWith("Revision "+search)) {
+				out.add(key);
+			}
+		}
+		return out;
 	}
 
 	@Override
